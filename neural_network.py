@@ -1,6 +1,7 @@
 # contains all classes for a neural network from sctach
 
 import math
+import random
 
 DEFAULT_WEIGHT = 1
 DEFAULT_BIAS = 0
@@ -17,6 +18,16 @@ def tanh(value):
 
 def sigmoid(value):
     return 1 / (1 + pow(math.e, -1 * value))
+
+# use for sigmoid
+def xavier_normal(fan_in, fan_out):
+    sigma = math.sqrt(2.0 / (fan_in + fan_out))
+    return random.gauss(0.0, sigma)
+
+# use for ReLu
+def he_normal(fan_in):
+    sigma = math.sqrt(2.0 / fan_in)
+    return random.gauss(0.0, sigma)
 
 class Node:
     def __init__(
@@ -36,10 +47,10 @@ class Node:
         self.bias = DEFAULT_BIAS if bias is None else bias # bias term when calculating value head
 
     def __str__(self):
-        return f'{self.alias}: {self.value}'
+        return f'{self.alias}: {self.value} ==> {[self.suceeding_conns[i][1] for i in range(len(self.suceeding_conns))]}'
     
     def __repr__(self):
-        return f'{self.alias}: {self.value}'
+        return f'{self.alias}: {self.value} ==> {[self.suceeding_conns[i][1] for i in range(len(self.suceeding_conns))]}'
 
     def connect_preceding_nodes(self, node_list, weight_list: list[float] = None, auto_update_values = False):
         for i in range(len(node_list)):
@@ -110,10 +121,32 @@ class Node_Layer:
 
         return result
     
-    def connect_preceding_layer(self, prev_layer, weight_matrix: list[list[float]] = None, auto_update_values = False):
+    def connect_preceding_layer(self, preceding_layer, weight_matrix: list[list[float]] = None, auto_update_values = False, weight_normalization = None, fan_in: int = None, fan_out: int = None):
         for i in range(len(self.node_list)): # each row contains the weights for an object in this object's node_list
-            self.node_list[i].connect_preceding_nodes(prev_layer.node_list, weight_list=weight_matrix[i] if weight_matrix is not None else None, auto_update_values=auto_update_values)
+            curr_weight_list = None
 
-    def connect_suceeding_layer(self, suceeding_layer, weight_matrix: list[list[float]] = None, auto_update_values = False):
+            # sets weight initialization
+            if weight_normalization == xavier_normal:
+                curr_weight_list = [xavier_normal(fan_in, fan_out) for i in range(len(preceding_layer.node_list))]
+            elif weight_normalization == he_normal:
+                curr_weight_list = [he_normal(fan_in) for i in range(len(preceding_layer.node_list))]
+            elif weight_matrix is not None:
+                # if no weight initializaiton is provided, use the provided weights instead
+                curr_weight_list = weight_matrix[i]
+            
+            self.node_list[i].connect_preceding_nodes(preceding_layer.node_list, weight_list=curr_weight_list, auto_update_values=auto_update_values)
+
+    def connect_suceeding_layer(self, suceeding_layer, weight_matrix: list[list[float]] = None, auto_update_values = False, weight_normalization = None, fan_in: int = None, fan_out: int = None):
         for i in range(len(self.node_list)): # each row contains the weights for an object in this object's node_list
-            self.node_list[i].connect_suceeding_nodes(suceeding_layer.node_list, weight_list=weight_matrix[i] if weight_matrix is not None else None, auto_update_values=auto_update_values)
+            curr_weight_list = None
+
+            # sets weight initialization
+            if weight_normalization == xavier_normal:
+                curr_weight_list = [xavier_normal(fan_in, fan_out) for i in range(len(suceeding_layer.node_list))]
+            elif weight_normalization == he_normal:
+                curr_weight_list = [he_normal(fan_in) for i in range(len(suceeding_layer.node_list))]
+            elif weight_matrix is not None:
+                # if no weight initialization is provided, use the provided weights instead
+                curr_weight_list = weight_matrix[i]
+            
+            self.node_list[i].connect_suceeding_nodes(suceeding_layer.node_list, weight_list=curr_weight_list, auto_update_values=auto_update_values)
