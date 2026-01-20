@@ -2,6 +2,9 @@
 
 import math
 
+DEFAULT_WEIGHT = 1
+DEFAULT_BIAS = 0
+
 def relu(value):
     if value <= 0:
         return 0
@@ -36,7 +39,10 @@ class Node:
         else:
             self.suceeding_conns = suceeding_conns # list of nodes this object connects to and its corresponding weights
         self.activation_function = activation_function # activation funciton to achieve non-linearity
-        self.bias = bias # bias term when calculating value head
+        if bias is None:
+            self.bias = 0
+        else:
+            self.bias = bias # bias term when calculating value head
 
     def __str__(self):
         return f'{self.alias}: {self.value}'
@@ -44,24 +50,34 @@ class Node:
     def __repr__(self):
         return f'{self.alias}: {self.value}'
 
-    def connect_preceding_nodes(self, node_list, weight_list: list[float]):
+    def connect_preceding_nodes(self, node_list, weight_list: list[float] = None):
         for i in range(len(node_list)):
             # adding new connections for preceding nodes
-            self.preceding_conns.append([node_list[i], weight_list[i]])
+            if weight_list is None: # use default weight instead
+                self.preceding_conns.append([node_list[i], DEFAULT_WEIGHT])
 
-            # making sure that connection is also updated for that preceding node
-            node_list[i].suceeding_conns.append([self, weight_list[i]])
+                node_list[i].suceeding_conns.append([self, DEFAULT_WEIGHT])
+            else:
+                self.preceding_conns.append([node_list[i], weight_list[i]])
+
+                # making sure that connection is also updated for that preceding node
+                node_list[i].suceeding_conns.append([self, weight_list[i]])
 
         # don't forget to update value with the new connections
         self.value = self.calc_value()
 
-    def connect_suceeding_nodes(self, node_list, weight_list: list[float]):
+    def connect_suceeding_nodes(self, node_list, weight_list: list[float] = None):
         for i in range(len(node_list)):
             # adding new connections for suceeding nodes
-            self.suceeding_conns.append([node_list[i], weight_list[i]])
+            if weight_list is None: # use default weight instead
+                self.suceeding_conns.append([node_list[i], DEFAULT_WEIGHT])
 
-            # making sure that connection is also updated for that succeeding node
-            node_list[i].preceding_conns.append([self, weight_list[i]])
+                node_list[i].preceding_conns.append([self, DEFAULT_WEIGHT])
+            else:
+                self.suceeding_conns.append([node_list[i], weight_list[i]])
+
+                # making sure that connection is also updated for that succeeding node
+                node_list[i].preceding_conns.append([self, weight_list[i]])
 
             # don't forget to update value of the suceeding node
             node_list[i].value = node_list[i].calc_value()
@@ -95,9 +111,11 @@ class Node_Layer:
         # going through each node in node_list and setting their activation function & bias
         for i in range(len(node_list)):
             node_list[i].activation_function = activation_function
-        if bias_list is not None:
-            for i in range(len(bias_list)):
+
+            if bias_list is not None:
                 node_list[i].bias = bias_list[i]
+            else:
+                node_list[i].bias = DEFAULT_BIAS
 
     def __str__(self):
         result = f'{self.alias}:\n'
@@ -115,10 +133,16 @@ class Node_Layer:
 
         return result
     
-    def connect_preceding_layer(self, prev_layer, weight_matrix: list[list[float]]):
-        for i in range(len(weight_matrix)): # each row contains the weights for an object in this object's node_list
-            self.node_list[i].connect_preceding_nodes(prev_layer.node_list, weight_matrix[i])
+    def connect_preceding_layer(self, prev_layer, weight_matrix: list[list[float]] = None):
+        for i in range(len(self.node_list)): # each row contains the weights for an object in this object's node_list
+            if weight_matrix is not None:
+                self.node_list[i].connect_preceding_nodes(prev_layer.node_list, weight_matrix[i])
+            else:
+                self.node_list[i].connect_preceding_nodes(prev_layer.node_list)
 
-    def connect_suceeding_layer(self, suceeding_layer, weight_matrix: list[list[float]]):
-        for i in range(len(weight_matrix)): # each row contains the weights for an object in this object's node_list
-            self.node_list[i].connect_suceeding_nodes(suceeding_layer.node_list, weight_matrix[i])
+    def connect_suceeding_layer(self, suceeding_layer, weight_matrix: list[list[float]] = None):
+        for i in range(len(self.node_list)): # each row contains the weights for an object in this object's node_list
+            if weight_matrix is not None:
+                self.node_list[i].connect_suceeding_nodes(suceeding_layer.node_list, weight_matrix[i])
+            else:
+                self.node_list[i].connect_suceeding_nodes(suceeding_layer.node_list)
