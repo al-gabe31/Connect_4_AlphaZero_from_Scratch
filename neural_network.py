@@ -25,7 +25,9 @@ def xavier_normal(fan_in, fan_out):
     return random.gauss(0.0, sigma)
 
 # use for ReLu
-def he_normal(fan_in):
+def he_normal(fan_in, fan_out = None):
+    # fan_out parameter won't be used
+    # it's just there to make it flexible when deciding between using xavier or he
     sigma = math.sqrt(2.0 / fan_in)
     return random.gauss(0.0, sigma)
 
@@ -150,3 +152,7 @@ class Node_Layer:
                 curr_weight_list = weight_matrix[i]
             
             self.node_list[i].connect_suceeding_nodes(suceeding_layer.node_list, weight_list=curr_weight_list, auto_update_values=auto_update_values)
+
+    def calc_layer_values(self):
+        for i in range(len(self.node_list)):
+            self.node_list[i].value = self.node_list[i].calc_value()
