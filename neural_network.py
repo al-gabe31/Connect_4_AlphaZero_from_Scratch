@@ -131,7 +131,7 @@ class Node_Layer:
             self,
             node_list: list[Node] = None,
             alias: str = '',
-            activation_function = lambda x: x,
+            activation_function = default_activation,
             bias_list: list[float] = None,
         ):
         self.node_list = [] if node_list is None else node_list
@@ -203,3 +203,117 @@ class Node_Layer:
     def calc_delta_values(self, is_output_layer = False, y_value = None):
         for i in range(len(self.node_list)):
             self.node_list[i].delta_value = self.node_list[i].get_delta_value(is_output_layer, y_value)
+
+    # sets activation, z-value, and delta to 0 for all nodes in this layer
+    def clear_layer_data(self):
+        for i in range(len(self.node_list)):
+            self.node_list[i].value = None
+            self.node_list[i].z_value = None
+            self.node_list[i].delta_value = None
+
+    def set_activation_function(self, activation_function):
+        for i in range(len(self.node_list)):
+            self.node_list[i].activation_function = activation_function
+
+    def set_bias_list(self, bias_list: list[float]):
+        for i in range(len(self.node_list)):
+            self.node_list[i].bias = bias_list[i]
+
+
+
+class Neural_Network:
+    def __init__(
+            self,
+            input_layer_num_nodes: int,
+            hidden_layer_dimensions: list[int],
+            output_layer_num_nodes: int,
+            alias: str = '',
+            activation_functions = None, # list of activation functions (length should match # of layers - 1)
+            weight_normalizations = None, # list of weight normalizations (length should match # of layers - 1)
+            bias_lists: list[list[float]] = None
+        ):
+
+        self.alias = alias
+        self.fan_in = input_layer_num_nodes
+        self.fan_out = output_layer_num_nodes
+
+        # initializing the input, hidden, and output layers
+        self.input_layer: Node_Layer = Node_Layer(
+            [Node(alias=f'n1{i + 1}') for i in range(input_layer_num_nodes)],
+            alias='l1'
+        )
+
+        self.hidden_layers: list[Node_Layer] = []
+        for i in range(len(hidden_layer_dimensions)):
+            new_hidden_layer = Node_Layer(
+                [Node(alias=f'n{i + 2}{j + 1}') for j in range(hidden_layer_dimensions[i])],
+                alias=f'l{i + 2}'
+            )
+
+            self.hidden_layers.append(new_hidden_layer)
+
+        self.output_layer: Node_Layer = Node_Layer(
+            [Node(alias=f'n{2 + len(hidden_layer_dimensions)}{i + 1}') for i in range(output_layer_num_nodes)],
+            alias=f'l{2 + len(hidden_layer_dimensions)}'
+        )
+
+        # setting up the activation functions for each layer
+        if activation_functions is None:
+            activation_functions = [default_activation for i in range(len(self.hidden_layers) + 1)] # just use the default activation function for all layers that isn't the input layer
+        
+        for i in range(len(activation_functions)):
+            if i < len(self.hidden_layers): # setting activation functions for the hidden layers
+                self.hidden_layers[0].set_activation_function(activation_functions[i])
+            elif i == len(self.hidden_layers): # setting activation function for the output layer
+                self.output_layer.set_activation_function(activation_functions[i])
+            # any overflow will be ignored
+
+        # setting up the connections layer by layer
+        if weight_normalizations is None:
+            # handles situations where weight_normalization is passed as None
+            weight_normalizations = [None for i in range(1 + len(self.hidden_layers))] # just fill weight normalizations with None (will just set all weights to 1)
+        for i in range(1 + len(self.hidden_layers) - len(weight_normalizations)): # handles siuations where there aren't enough weight normalizations in the list
+            weight_normalizations.append(None) # adds any missing weight normalizations as None
+
+        for i in range(len(weight_normalizations)):
+            if i == 0 and len(self.hidden_layers) != 0: # input layer to the first hidden layer (if it exists)
+                self.input_layer.connect_suceeding_layer(self.hidden_layers[i], weight_normalization=weight_normalizations[i], fan_in=self.fan_in, fan_out=self.fan_out)
+            elif i == 0 and len(self.hidden_layers) == 0: # input layer to outpuer layer (there are no hidden layers)
+                self.input_layer.connect_suceeding_layer(self.output_layer, weight_normalization=weight_normalizations[i], fan_in=self.fan_in, fan_out=self.fan_out)
+            elif i < len(self.hidden_layers): # hidden layer to hidden layer
+                self.hidden_layers[i - 1].connect_suceeding_layer(self.hidden_layers[i], weight_normalization=weight_normalizations[i], fan_in=self.fan_in, fan_out=self.fan_out)
+            elif i == len(self.hidden_layers): # last hidden layer to output layer
+                self.hidden_layers[-1].connect_suceeding_layer(self.output_layer, weight_normalization=weight_normalizations[i], fan_in=self.fan_in, fan_out=self.fan_out)
+
+        # setting up the biases for each layer that isn't the input layer
+        if bias_lists is None: # if bias_lists is None, just set all biases to DEFAULT_BIAS
+            bias_lists = []
+            for i in range(len(self.hidden_layers)):
+                bias_lists.append([DEFAULT_BIAS for j in range(len(self.hidden_layers[i].node_list))])
+            bias_lists.append([DEFAULT_BIAS for i in range(len(self.output_layer.node_list))])
+        
+        for i in range(len(self.hidden_layers)):
+            self.hidden_layers[i].set_bias_list(bias_lists[i])
+        self.output_layer.set_bias_list(bias_lists[len(self.hidden_layers)])
+
+    def __str__(self):
+        result = f'{self.alias}:\n'
+        result += f'{str(self.input_layer)}\n'
+
+        for i in range(len(self.hidden_layers)):
+            result += f'{str(self.hidden_layers[i])}\n'
+
+        result += f'{str(self.output_layer)}'
+
+        return result
+    
+    def __repr__(self):
+        result = f'{self.alias}:\n'
+        result += f'{str(self.input_layer)}\n'
+
+        for i in range(len(self.hidden_layers)):
+            result += f'{str(self.hidden_layers[i])}\n'
+
+        result += f'{str(self.output_layer)}'
+
+        return result
