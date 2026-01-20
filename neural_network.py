@@ -6,6 +6,9 @@ import random
 DEFAULT_WEIGHT = 1
 DEFAULT_BIAS = 0
 
+def default_activation(value):
+    return value
+
 def relu(value):
     if value <= 0:
         return 0
@@ -18,6 +21,18 @@ def tanh(value):
 
 def sigmoid(value):
     return 1 / (1 + pow(math.e, -1 * value))
+
+def activation_derivative(func_name, value):
+    if func_name == default_activation:
+        return 1
+    elif func_name == relu:
+        return 1 if value > 0 else 0
+    elif func_name == tanh:
+        return 1 - pow(tanh(value), 2)
+    elif func_name == sigmoid:
+        return sigmoid(value) * (1 - sigmoid(value))
+    else:
+        return 0
 
 # use for sigmoid
 def xavier_normal(fan_in, fan_out):
@@ -38,7 +53,7 @@ class Node:
             alias: str = '',
             preceding_conns = None,
             suceeding_conns = None,
-            activation_function = lambda x: x,
+            activation_function = default_activation,
             bias: float = None,
         ):
         self.value = value # value head of this node
@@ -47,12 +62,14 @@ class Node:
         self.suceeding_conns = [] if suceeding_conns is None else suceeding_conns # list of nodes this object connects to and its corresponding weights
         self.activation_function = activation_function # activation funciton to achieve non-linearity
         self.bias = DEFAULT_BIAS if bias is None else bias # bias term when calculating value head
+        self.z_value: float = None
+        self.delta_value: float = None # very important for backpropagation
 
     def __str__(self):
-        return f'{self.alias}: {self.value} ==> {[self.suceeding_conns[i][1] for i in range(len(self.suceeding_conns))]}'
+        return f'{self.alias}: {self.value} [z: {self.z_value} | delta: {self.delta_value}] ==> {[self.suceeding_conns[i][1] for i in range(len(self.suceeding_conns))]}'
     
     def __repr__(self):
-        return f'{self.alias}: {self.value} ==> {[self.suceeding_conns[i][1] for i in range(len(self.suceeding_conns))]}'
+        return f'{self.alias}: {self.value} [z: {self.z_value} | delta: {self.delta_value}] ==> {[self.suceeding_conns[i][1] for i in range(len(self.suceeding_conns))]}'
 
     def connect_preceding_nodes(self, node_list, weight_list: list[float] = None, auto_update_values = False):
         for i in range(len(node_list)):
@@ -78,15 +95,34 @@ class Node:
             if auto_update_values:
                 node_list[i].value = node_list[i].calc_value()
         
+    # returns the activation value of a node (doesn't actually set it)
     def calc_value(self):
+        return self.activation_function(self.get_z_value())
+    
+    def get_z_value(self):
         summation = 0
 
-        # going through each precedding connection and add up: value * weight
+        # going through each preceding connection and add up: value * weight
         for i in range(len(self.preceding_conns)):
             summation += self.preceding_conns[i][0].value * self.preceding_conns[i][1]
 
-        # feed the summation into the activation function (don't forget to include the bias)
-        return self.activation_function(summation + self.bias)
+        return summation + self.bias
+    
+    def get_delta_value(self, in_output_layer = False, y_value = None):
+        if in_output_layer:
+            return 2 * (y_value - self.value) * activation_derivative(self.activation_function, self.get_z_value())
+        else:
+            summation = 0
+
+            # going through each node in suceeding connections: delta * corresponding weight
+            for i in range(len(self.suceeding_conns)):
+                summation += self.suceeding_conns[i][0].delta_value * self.suceeding_conns[i][1]
+
+            # then multiply all that by the derivative of the local node's activation function
+            summation *= activation_derivative(self.activation_function, self.get_z_value())
+
+            return summation
+
     
 
 
@@ -116,7 +152,7 @@ class Node_Layer:
         return result
     
     def __repr__(self):
-        result = f'Layer {self.alias} contain the following nodes:\n'
+        result = f'{self.alias}:\n'
 
         for i in range(len(self.node_list)):
             result += f'\t{str(self.node_list[i])}'
@@ -153,6 +189,17 @@ class Node_Layer:
             
             self.node_list[i].connect_suceeding_nodes(suceeding_layer.node_list, weight_list=curr_weight_list, auto_update_values=auto_update_values)
 
+    # updates activation values for all nodes in this layer
     def calc_layer_values(self):
         for i in range(len(self.node_list)):
             self.node_list[i].value = self.node_list[i].calc_value()
+
+    # updates z values for all nodes in this layer
+    def calc_layer_z_values(self):
+        for i in range(len(self.node_list)):
+            self.node_list[i].z_value = self.node_list[i].get_z_value()
+
+    # updates delta values for all nodes in this layer
+    def calc_delta_values(self, is_output_layer = False, y_value = None):
+        for i in range(len(self.node_list)):
+            self.node_list[i].delta_value = self.node_list[i].get_delta_value(is_output_layer, y_value)
