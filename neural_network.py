@@ -110,7 +110,7 @@ class Node:
     
     def get_delta_value(self, in_output_layer = False, y_value = None):
         if in_output_layer:
-            return 2 * (y_value - self.value) * activation_derivative(self.activation_function, self.get_z_value())
+            return 2 * (self.value - y_value) * activation_derivative(self.activation_function, self.get_z_value())
         else:
             summation = 0
 
