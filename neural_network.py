@@ -42,4 +42,4 @@ class Node:
         return self.activation_function(summation)
     
     def update_weights(self):
-        pass
+        pass # little update
