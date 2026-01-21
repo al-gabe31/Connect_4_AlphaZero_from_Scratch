@@ -396,3 +396,11 @@ class Neural_Network:
             bias_partial_derivatives.insert(0, curr_bias_partials)
 
         return bias_partial_derivatives
+    
+    def clear_neural_network(self):
+        self.output_layer.clear_layer_data()
+
+        for i in range(len(self.hidden_layers) - 1, -1, -1):
+            self.hidden_layers[i].clear_layer_data()
+
+        self.input_layer.clear_layer_data()
