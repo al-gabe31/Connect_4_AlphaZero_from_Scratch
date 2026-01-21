@@ -376,3 +376,23 @@ class Neural_Network:
         weight_partial_derivatives.insert(0, curr_weight_partials)
 
         return weight_partial_derivatives
+    
+    def backproagation_biases(self):
+        bias_partial_derivatives = []
+
+        curr_bias_partials = np.zeros(len(self.output_layer.node_list))
+
+        # getting bias partial derivatives starting from the output layer
+        for i in range(len(self.output_layer.node_list)):
+            curr_bias_partials[i] = self.output_layer.node_list[i].delta_value
+        bias_partial_derivatives.insert(0, curr_bias_partials)
+
+        # doing the same for the hidden layers
+        for layer_index in range(len(self.hidden_layers) - 1, -1, -1): # goes through each hiden layer from right to left
+            curr_bias_partials = np.zeros(len(self.hidden_layers[layer_index].node_list))
+
+            for i in range(len(self.hidden_layers[layer_index].node_list)):
+                curr_bias_partials[i] = self.hidden_layers[layer_index].node_list[i].delta_value
+            bias_partial_derivatives.insert(0, curr_bias_partials)
+
+        return bias_partial_derivatives
