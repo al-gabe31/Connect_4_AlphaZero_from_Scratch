@@ -2,6 +2,7 @@
 
 import math
 import random
+import numpy as np
 
 DEFAULT_WEIGHT = 1
 DEFAULT_BIAS = 0
@@ -66,10 +67,10 @@ class Node:
         self.delta_value: float = None # very important for backpropagation
 
     def __str__(self):
-        return f'{self.alias}: {self.value} [z: {self.z_value} | delta: {self.delta_value}] ==> {[self.suceeding_conns[i][1] for i in range(len(self.suceeding_conns))]}'
+        return f'{self.alias}: {self.value} [z: {self.z_value} | delta: {self.delta_value} | bias: {self.bias}] ==> {[self.suceeding_conns[i][1] for i in range(len(self.suceeding_conns))]}'
     
     def __repr__(self):
-        return f'{self.alias}: {self.value} [z: {self.z_value} | delta: {self.delta_value}] ==> {[self.suceeding_conns[i][1] for i in range(len(self.suceeding_conns))]}'
+        return f'{self.alias}: {self.value} [z: {self.z_value} | delta: {self.delta_value} | bias: {self.bias}] ==> {[self.suceeding_conns[i][1] for i in range(len(self.suceeding_conns))]}'
 
     def connect_preceding_nodes(self, node_list, weight_list: list[float] = None, auto_update_values = False):
         for i in range(len(node_list)):
@@ -173,6 +174,16 @@ class Node_Layer:
                 curr_weight_list = weight_matrix[i]
             
             self.node_list[i].connect_preceding_nodes(preceding_layer.node_list, weight_list=curr_weight_list, auto_update_values=auto_update_values)
+
+    def update_preceding_weights(self, preceding_layer, weight_matrix: list[list[float]] = None):
+        # first clear all connections this layer has with the previous layer and vice versa
+        for i in range(len(self.node_list)):
+            self.node_list[i].preceding_conns.clear()
+        for i in range(len(preceding_layer.node_list)):
+            preceding_layer.node_list[i].suceeding_conns.clear()
+
+        # reconnecting the 2 layers with the update weights
+        self.connect_preceding_layer(preceding_layer, weight_matrix, auto_update_values=False)
 
     def connect_suceeding_layer(self, suceeding_layer, weight_matrix: list[list[float]] = None, auto_update_values = False, weight_normalization = None, fan_in: int = None, fan_out: int = None):
         for i in range(len(self.node_list)): # each row contains the weights for an object in this object's node_list
@@ -317,3 +328,51 @@ class Neural_Network:
         result += f'{str(self.output_layer)}'
 
         return result
+    
+    def input_values(self, input_set: list[float]):
+        for i in range(len(input_set)):
+            self.input_layer.node_list[i].value = input_set[i]
+
+    def forward_pass(self):
+        for i in range(len(self.hidden_layers)):
+            self.hidden_layers[i].calc_layer_values()
+            self.hidden_layers[i].calc_layer_z_values()
+
+        self.output_layer.calc_layer_values()
+        self.output_layer.calc_layer_z_values()
+
+    def backwardpass(self, y_value):
+        self.output_layer.calc_delta_values(is_output_layer=True, y_value=y_value)
+
+        for i in range(len(self.hidden_layers) - 1, -1, -1):
+            self.hidden_layers[i].calc_delta_values()
+
+    def backpropagation_weights(self):
+        weight_partial_derivatives = []
+
+        curr_weight_partials = np.zeros((len(self.output_layer.node_list), len(self.hidden_layers[-1].node_list)))
+
+        # getting weight partial derivatives starting from the output layer
+        for i in range(len(self.output_layer.node_list)):
+            for j in range(len(self.output_layer.node_list[i].preceding_conns)):
+                curr_weight_partials[i][j] = self.output_layer.node_list[i].preceding_conns[j][0].value * self.output_layer.node_list[i].delta_value
+        weight_partial_derivatives.insert(0, curr_weight_partials)
+        
+        # doing the same for the hidden layer (besides the one preceding the input layer)
+        for layer_index in range(len(self.hidden_layers) - 1, 0, -1): # stops at the left-most hidden layer (doesn't iterate past it)
+            curr_weight_partials = np.zeros((len(self.hidden_layers[layer_index].node_list), len(self.hidden_layers[layer_index-1].node_list)))
+            
+            for i in range(len(self.hidden_layers[layer_index].node_list)):
+                for j in range(len(self.hidden_layers[layer_index].node_list[i].preceding_conns)):
+                    curr_weight_partials[i][j] = self.hidden_layers[layer_index].node_list[i].preceding_conns[j][0].value * self.hidden_layers[layer_index].node_list[i].delta_value
+            weight_partial_derivatives.insert(0, curr_weight_partials)
+
+        # finally getting the partial derivaties from the left-most hidden layer
+        curr_weight_partials = np.zeros((len(self.hidden_layers[0].node_list), len(self.input_layer.node_list)))
+
+        for i in range(len(self.hidden_layers[0].node_list)):
+            for j in range(len(self.hidden_layers[0].node_list[i].preceding_conns)):
+                curr_weight_partials[i][j] = self.hidden_layers[0].node_list[i].preceding_conns[j][0].value * self.hidden_layers[0].node_list[i].delta_value
+        weight_partial_derivatives.insert(0, curr_weight_partials)
+
+        return weight_partial_derivatives
