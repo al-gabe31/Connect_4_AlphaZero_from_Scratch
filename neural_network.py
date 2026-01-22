@@ -230,6 +230,33 @@ class Node_Layer:
         for i in range(len(self.node_list)):
             self.node_list[i].bias = bias_list[i]
 
+    # get's the weights matrix of this layer of dimensions nxm
+        # n: number of nodes in this layer
+        # m: number of nodes in the preceding layer
+    def get_weights_matrix(self):
+        weights_matrix = []
+
+        for i in range(len(self.node_list)):
+            curr_row_weights = []
+            for j in range(len(self.node_list[i].preceding_conns)):
+                curr_row_weights.append(self.node_list[i].preceding_conns[j][1])
+
+            curr_row_weights = np.array(curr_row_weights)
+            weights_matrix.append(curr_row_weights)
+        weights_matrix = np.array(weights_matrix)
+
+        return weights_matrix
+    
+    # get's the bias list of this layer
+    def get_bias(self):
+        bias_list = []
+
+        for i in range(len(self.node_list)):
+            bias_list.append(self.node_list[i].bias)
+        bias_list = np.array(bias_list)
+
+        return bias_list
+
 
 
 class Neural_Network:
@@ -404,3 +431,101 @@ class Neural_Network:
             self.hidden_layers[i].clear_layer_data()
 
         self.input_layer.clear_layer_data()
+
+    def learn_data(self, input_list: list[list[float]], expected_list: list[float], learning_rate: float = 0.001):
+        n = len(input_list) # number of input sets
+        weight_partials = [] # will be used to update weights
+        bias_partials = [] # will be used to update biases
+
+        # run forward and backpropagation for each input set and expected output
+        for i in range(len(input_list)):
+            # 1. inserts input into the insert layer
+            self.input_values(input_list[i])
+
+            # 2. forward pass data down the neural network
+            self.forward_pass()
+
+            # 3. calculate delta values downstream using the expected output
+            self.backwardpass(expected_list[i])
+
+            # 4. tally partial derivatives for weights and biases
+            curr_weight_partials = self.backpropagation_weights()
+            curr_bias_partials = self.backproagation_biases()
+
+            # DELETE BELOW LATER!!!
+            # ===================================================
+            # ===================================================
+            # print(f'curr weight partials: i = {i}')
+            # print('='*60)
+            # for j in range(len(curr_weight_partials)):
+            #     print(curr_weight_partials[j])
+            #     print('='*60)
+
+            print(f'curr bias partials i = {i}')
+            print('='*60)
+            for j in range(len(curr_bias_partials)):
+                print(curr_bias_partials[j])
+                print('='*60)
+
+            print('\n\n')
+            # ===================================================
+            # ===================================================
+
+            # if weight and bias partials list is currently empty, just append them to their respective ararys
+            if i == 0:
+                for j in range(len(curr_weight_partials)):
+                    weight_partials.append(curr_weight_partials[j])
+                for j in range(len(curr_bias_partials)):
+                    bias_partials.append(curr_bias_partials[j])
+            # otherwise, just tally (add) them to the populated partial ararys
+            else:
+                for j in range(len(curr_weight_partials)):
+                    weight_partials[j] += curr_weight_partials[j]
+                for j in range(len(curr_bias_partials)):
+                    bias_partials[j] += curr_bias_partials[j]
+
+            # 5. clear the neural network before moving on to the next input set
+            self.clear_neural_network()
+
+        # 6. averages the tallies in the weight and bias partials
+        for i in range(len(weight_partials)):
+            weight_partials[i] /= n
+        for i in range(len(bias_partials)):
+            bias_partials[i] /= n
+
+        # 7. updates the weights and biases
+        # updating the weights below
+        for i in range(len(self.hidden_layers) + 1):
+            # updating weights in hidden layers
+            if i < len(self.hidden_layers):
+                new_weights = self.hidden_layers[i].get_weights_matrix() - (learning_rate * weight_partials[i])
+
+                if i == 0: # first hidden layer (its preceding layer is the input layer)
+                    self.hidden_layers[i].update_preceding_weights(self.input_layer, new_weights)
+                else: # otherwise, the preceding layer will just be another hidden layer
+                    self.hidden_layers[i].update_preceding_weights(self.hidden_layers[i-1], new_weights)
+            # updating the weights in the output layer
+            elif i == len(self.hidden_layers):
+                new_weights = self.output_layer.get_weights_matrix() - (learning_rate * weight_partials[i])
+
+                # if there are hidden layers, the output layer's preceding layer will be a hidden layer
+                if len(self.hidden_layers) > 0:
+                    self.output_layer.update_preceding_weights(self.hidden_layers[-1], new_weights)
+                # otherwise, the output layer's preceding layer will be the input layer
+                else:
+                    self.output_layer.update_preceding_weights(self.input_layer, new_weights)
+
+        # updating the biases below
+        for i in range(len(self.hidden_layers) + 1):
+            # updating the biases in the hidden layers
+            if i < len(self.hidden_layers):
+                new_biases = self.hidden_layers[i].get_bias() - (learning_rate * bias_partials[i])
+
+                for j in range(len(self.hidden_layers[i].node_list)):
+                    self.hidden_layers[i].node_list[j].bias = new_biases[j]
+            # updating the biases in the output layer
+            elif i == len(self.hidden_layers):
+                new_biases = self.output_layer.get_bias() - (learning_rate * bias_partials[i])
+
+                for j in range(len(self.output_layer.node_list)):
+                    self.output_layer.node_list[j].bias = new_biases[j]
