@@ -5,31 +5,40 @@ ROWS = 6
 COLS = 7
 CELL_SIZE = 80
 PADDING = 10
+PIECE_SIZE = 60
 
 WIDTH = COLS * CELL_SIZE + 2 * PADDING
-HEIGHT = ROWS * CELL_SIZE + 2 * PADDING
+HEIGHT = ROWS * CELL_SIZE + 2 * PADDING + 80  # space for status bar
 
 root = tk.Tk()
 root.title("Connect 4")
 
-canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg="blue")
+canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT - 80, bg="blue")
 canvas.pack()
 
-# --- Load images (keep references!) ---
-PIECE_SIZE = 60  # try 56–64 if you want to tweak
+# --- Status bar ---
+status_frame = tk.Frame(root, height=80)
+status_frame.pack(fill="x")
 
+status_image_label = tk.Label(status_frame)
+status_image_label.pack(side="left", padx=20)
+
+status_text = tk.StringVar()
+status_label = tk.Label(status_frame, textvariable=status_text, font=("Arial", 16))
+status_label.pack(side="left")
+
+# --- Load images ---
 red_img = Image.open("src/red_piece.png").resize((PIECE_SIZE, PIECE_SIZE), Image.LANCZOS)
 yellow_img = Image.open("src/yellow_piece.png").resize((PIECE_SIZE, PIECE_SIZE), Image.LANCZOS)
 
 red_piece = ImageTk.PhotoImage(red_img)
 yellow_piece = ImageTk.PhotoImage(yellow_img)
 
-
 # --- Game state ---
 board = [[None for _ in range(COLS)] for _ in range(ROWS)]
 current_player = "R"
+game_over = False
 
-# Map canvas items to columns
 circle_to_column = {}
 
 # --- Draw board ---
@@ -48,10 +57,47 @@ for row in range(ROWS):
 
         circle_to_column[circle] = col
 
-def drop_piece(col):
-    global current_player
+def update_status():
+    if current_player == "R":
+        status_image_label.config(image=red_piece)
+        status_text.set("Red's turn")
+    else:
+        status_image_label.config(image=yellow_piece)
+        status_text.set("Yellow's turn")
 
-    # Find lowest empty row
+def check_winner(player):
+    # Horizontal
+    for r in range(ROWS):
+        for c in range(COLS - 3):
+            if all(board[r][c+i] == player for i in range(4)):
+                return True
+
+    # Vertical
+    for r in range(ROWS - 3):
+        for c in range(COLS):
+            if all(board[r+i][c] == player for i in range(4)):
+                return True
+
+    # Diagonal down-right
+    for r in range(ROWS - 3):
+        for c in range(COLS - 3):
+            if all(board[r+i][c+i] == player for i in range(4)):
+                return True
+
+    # Diagonal up-right
+    for r in range(3, ROWS):
+        for c in range(COLS - 3):
+            if all(board[r-i][c+i] == player for i in range(4)):
+                return True
+
+    return False
+
+def drop_piece(col):
+    global current_player, game_over
+
+    if game_over:
+        return
+
     for row in reversed(range(ROWS)):
         if board[row][col] is None:
             board[row][col] = current_player
@@ -62,21 +108,28 @@ def drop_piece(col):
             img = red_piece if current_player == "R" else yellow_piece
             canvas.create_image(cx, cy, image=img)
 
+            if check_winner(current_player):
+                game_over = True
+                status_image_label.config(image=img)
+                status_text.set(
+                    "Red wins!" if current_player == "R" else "Yellow wins!"
+                )
+                return
+
             current_player = "Y" if current_player == "R" else "R"
+            update_status()
             return
 
-    print(f"Column {col + 1} is full!")
-
 def on_click(event):
-    item = canvas.find_closest(event.x, event.y)
-    if not item:
+    if game_over:
         return
 
+    item = canvas.find_closest(event.x, event.y)
     col = circle_to_column.get(item[0])
     if col is not None:
-        print(f"Clicked column: {col + 1}")
         drop_piece(col)
 
 canvas.bind("<Button-1>", on_click)
 
+update_status()
 root.mainloop()
