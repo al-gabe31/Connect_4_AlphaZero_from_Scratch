@@ -109,7 +109,7 @@ class Node:
 
         return summation + self.bias
     
-    def get_delta_value(self, in_output_layer = False, y_value = None):
+    def get_delta_value(self, in_output_layer: bool = False, y_value: float = None):
         if in_output_layer:
             return 2 * (self.value - y_value) * activation_derivative(self.activation_function, self.get_z_value())
         else:
@@ -211,9 +211,13 @@ class Node_Layer:
             self.node_list[i].z_value = self.node_list[i].get_z_value()
 
     # updates delta values for all nodes in this layer
-    def calc_delta_values(self, is_output_layer = False, y_value = None):
-        for i in range(len(self.node_list)):
-            self.node_list[i].delta_value = self.node_list[i].get_delta_value(is_output_layer, y_value)
+    def calc_delta_values(self, is_output_layer: bool = False, y_values: list[float] = None):
+        if not is_output_layer:
+            for i in range(len(self.node_list)):
+                self.node_list[i].delta_value = self.node_list[i].get_delta_value()
+        else:
+            for i in range(len(self.node_list)):
+                self.node_list[i].delta_value = self.node_list[i].get_delta_value(in_output_layer=True, y_value=y_values[i])
 
     # sets activation, z-value, and delta to 0 for all nodes in this layer
     def clear_layer_data(self):
@@ -368,8 +372,8 @@ class Neural_Network:
         self.output_layer.calc_layer_values()
         self.output_layer.calc_layer_z_values()
 
-    def backwardpass(self, y_value):
-        self.output_layer.calc_delta_values(is_output_layer=True, y_value=y_value)
+    def backwardpass(self, y_values: list[float]):
+        self.output_layer.calc_delta_values(is_output_layer=True, y_values=y_values)
 
         for i in range(len(self.hidden_layers) - 1, -1, -1):
             self.hidden_layers[i].calc_delta_values()
@@ -432,7 +436,7 @@ class Neural_Network:
 
         self.input_layer.clear_layer_data()
 
-    def learn_data(self, input_list: list[list[float]], expected_list: list[float], learning_rate: float = 0.001):
+    def learn_data(self, input_list: list[list[float]], expected_list: list[list[float]], learning_rate: float = 0.001):
         n = len(input_list) # number of input sets
         weight_partials = [] # will be used to update weights
         bias_partials = [] # will be used to update biases
@@ -451,25 +455,6 @@ class Neural_Network:
             # 4. tally partial derivatives for weights and biases
             curr_weight_partials = self.backpropagation_weights()
             curr_bias_partials = self.backproagation_biases()
-
-            # DELETE BELOW LATER!!!
-            # ===================================================
-            # ===================================================
-            # print(f'curr weight partials: i = {i}')
-            # print('='*60)
-            # for j in range(len(curr_weight_partials)):
-            #     print(curr_weight_partials[j])
-            #     print('='*60)
-
-            # print(f'curr bias partials i = {i}')
-            # print('='*60)
-            # for j in range(len(curr_bias_partials)):
-            #     print(curr_bias_partials[j])
-            #     print('='*60)
-
-            # print('\n\n')
-            # ===================================================
-            # ===================================================
 
             # if weight and bias partials list is currently empty, just append them to their respective ararys
             if i == 0:
