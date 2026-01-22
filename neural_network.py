@@ -461,13 +461,13 @@ class Neural_Network:
             #     print(curr_weight_partials[j])
             #     print('='*60)
 
-            print(f'curr bias partials i = {i}')
-            print('='*60)
-            for j in range(len(curr_bias_partials)):
-                print(curr_bias_partials[j])
-                print('='*60)
+            # print(f'curr bias partials i = {i}')
+            # print('='*60)
+            # for j in range(len(curr_bias_partials)):
+            #     print(curr_bias_partials[j])
+            #     print('='*60)
 
-            print('\n\n')
+            # print('\n\n')
             # ===================================================
             # ===================================================
 
@@ -529,3 +529,18 @@ class Neural_Network:
 
                 for j in range(len(self.output_layer.node_list)):
                     self.output_layer.node_list[j].bias = new_biases[j]
+
+    def get_output(self, input_set: list[float]):
+        self.input_values(input_set)
+        self.forward_pass()
+
+        output = []
+        for i in range(len(self.output_layer.node_list)):
+            output.append(self.output_layer.node_list[i].value)
+        output = np.array(output)
+        
+        return output
+    
+    def multi_run_learn_data(self, input_list: list[list[float]], expected_list: list[float], learning_rate: float = 0.001, epochs: int = 1000):
+        for epoch in range(epochs):
+            self.learn_data(input_list=input_list, expected_list=expected_list, learning_rate=learning_rate)
