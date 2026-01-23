@@ -75,7 +75,13 @@ class Node:
     def __repr__(self):
         return f'{self.alias}: {self.value} [z: {self.z_value} | delta: {self.delta_value} | bias: {self.bias}] ==> {[self.suceeding_conns[i][1] for i in range(len(self.suceeding_conns))]}'
 
-    def connect_preceding_nodes(self, node_list, weight_list: list[float] = None, auto_update_values = False, layer_node_list = None):
+    def connect_preceding_nodes(
+            self, 
+            node_list, 
+            weight_list: list[float] = None, 
+            auto_update_values = False, 
+            layer_node_list = None
+        ):
         for i in range(len(node_list)):
             # adding new connections for preceding nodes
             self.preceding_conns.append([node_list[i], DEFAULT_WEIGHT if weight_list is None else weight_list[i]])
@@ -87,7 +93,13 @@ class Node:
         if auto_update_values:
             self.value = self.calc_value(layer_node_list=layer_node_list)
 
-    def connect_suceeding_nodes(self, node_list, weight_list: list[float] = None, auto_update_values = False, layer_node_list = None):
+    def connect_suceeding_nodes(
+            self, 
+            node_list, 
+            weight_list: list[float] = None, 
+            auto_update_values = False, 
+            layer_node_list = None
+        ):
         for i in range(len(node_list)):
             # adding new connections for suceeding nodes
             self.suceeding_conns.append([node_list[i], DEFAULT_WEIGHT if weight_list is None else weight_list[i]])
@@ -100,7 +112,10 @@ class Node:
                 node_list[i].value = node_list[i].calc_value(layer_node_list=layer_node_list)
         
     # returns the activation value of a node (doesn't actually set it)
-    def calc_value(self, layer_node_list = None):
+    def calc_value(
+            self, 
+            layer_node_list = None
+        ):
         if self.activation_function == softmax:
             # activation value of this node relies on the z-values of the other nodes in the same layer
             values_list = [layer_node_list[i].get_z_value() for i in range(len(layer_node_list))]
@@ -118,7 +133,11 @@ class Node:
 
         return summation + self.bias
     
-    def get_delta_value(self, in_output_layer: bool = False, y_value: float = None):
+    def get_delta_value(
+            self, 
+            in_output_layer: bool = False, 
+            y_value: float = None
+        ):
         if in_output_layer:
             if self.activation_function == softmax:
                 return self.value - y_value # activation - actual
@@ -172,7 +191,15 @@ class Node_Layer:
 
         return result
     
-    def connect_preceding_layer(self, preceding_layer, weight_matrix: list[list[float]] = None, auto_update_values = False, weight_normalization = None, fan_in: int = None, fan_out: int = None):
+    def connect_preceding_layer(
+            self, 
+            preceding_layer, 
+            weight_matrix: list[list[float]] = None, 
+            auto_update_values = False, 
+            weight_normalization = None, 
+            fan_in: int = None, 
+            fan_out: int = None
+        ):
         for i in range(len(self.node_list)): # each row contains the weights for an object in this object's node_list
             curr_weight_list = None
 
@@ -187,7 +214,11 @@ class Node_Layer:
             
             self.node_list[i].connect_preceding_nodes(preceding_layer.node_list, weight_list=curr_weight_list, auto_update_values=auto_update_values, layer_node_list=self.node_list)
 
-    def update_preceding_weights(self, preceding_layer, weight_matrix: list[list[float]] = None):
+    def update_preceding_weights(
+            self, 
+            preceding_layer, 
+            weight_matrix: list[list[float]] = None
+        ):
         # first clear all connections this layer has with the previous layer and vice versa
         for i in range(len(self.node_list)):
             self.node_list[i].preceding_conns.clear()
@@ -197,7 +228,15 @@ class Node_Layer:
         # reconnecting the 2 layers with the update weights
         self.connect_preceding_layer(preceding_layer, weight_matrix, auto_update_values=False)
 
-    def connect_suceeding_layer(self, suceeding_layer, weight_matrix: list[list[float]] = None, auto_update_values = False, weight_normalization = None, fan_in: int = None, fan_out: int = None):
+    def connect_suceeding_layer(
+            self, 
+            suceeding_layer, 
+            weight_matrix: list[list[float]] = None, 
+            auto_update_values = False, 
+            weight_normalization = None, 
+            fan_in: int = None, 
+            fan_out: int = None
+        ):
         for i in range(len(self.node_list)): # each row contains the weights for an object in this object's node_list
             curr_weight_list = None
 
@@ -223,7 +262,11 @@ class Node_Layer:
             self.node_list[i].z_value = self.node_list[i].get_z_value()
 
     # updates delta values for all nodes in this layer
-    def calc_delta_values(self, is_output_layer: bool = False, y_values: list[float] = None):
+    def calc_delta_values(
+            self, 
+            is_output_layer: bool = False, 
+            y_values: list[float] = None
+        ):
         if not is_output_layer:
             for i in range(len(self.node_list)):
                 self.node_list[i].delta_value = self.node_list[i].get_delta_value()
@@ -238,11 +281,17 @@ class Node_Layer:
             self.node_list[i].z_value = None
             self.node_list[i].delta_value = None
 
-    def set_activation_function(self, activation_function):
+    def set_activation_function(
+            self, 
+            activation_function
+        ):
         for i in range(len(self.node_list)):
             self.node_list[i].activation_function = activation_function
 
-    def set_bias_list(self, bias_list: list[float]):
+    def set_bias_list(
+            self, 
+            bias_list: list[float]
+        ):
         for i in range(len(self.node_list)):
             self.node_list[i].bias = bias_list[i]
 
@@ -372,7 +421,10 @@ class Neural_Network:
 
         return result
     
-    def input_values(self, input_set: list[float]):
+    def input_values(
+            self, 
+            input_set: list[float]
+        ):
         for i in range(len(input_set)):
             self.input_layer.node_list[i].value = input_set[i]
 
@@ -384,7 +436,10 @@ class Neural_Network:
         self.output_layer.calc_layer_values()
         self.output_layer.calc_layer_z_values()
 
-    def backwardpass(self, y_values: list[float]):
+    def backwardpass(
+            self, 
+            y_values: list[float]
+        ):
         self.output_layer.calc_delta_values(is_output_layer=True, y_values=y_values)
 
         for i in range(len(self.hidden_layers) - 1, -1, -1):
@@ -448,7 +503,12 @@ class Neural_Network:
 
         self.input_layer.clear_layer_data()
 
-    def learn_data(self, input_list: list[list[float]], expected_list: list[list[float]], learning_rate: float = 0.001):
+    def learn_data(
+            self, 
+            input_list: list[list[float]], 
+            expected_list: list[list[float]], 
+            learning_rate: float = 0.001
+        ):
         n = len(input_list) # number of input sets
         weight_partials = [] # will be used to update weights
         bias_partials = [] # will be used to update biases
@@ -527,7 +587,10 @@ class Neural_Network:
                 for j in range(len(self.output_layer.node_list)):
                     self.output_layer.node_list[j].bias = new_biases[j]
 
-    def get_output(self, input_set: list[float]):
+    def get_output(
+            self, 
+            input_set: list[float]
+        ):
         self.input_values(input_set)
         self.forward_pass()
 
@@ -538,6 +601,12 @@ class Neural_Network:
         
         return output
     
-    def multi_run_learn_data(self, input_list: list[list[float]], expected_list: list[float], learning_rate: float = 0.001, epochs: int = 1000):
+    def multi_run_learn_data(
+            self, 
+            input_list: list[list[float]], 
+            expected_list: list[float], 
+            learning_rate: float = 0.001, 
+            epochs: int = 1000
+        ):
         for epoch in range(epochs):
             self.learn_data(input_list=input_list, expected_list=expected_list, learning_rate=learning_rate)
