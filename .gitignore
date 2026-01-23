@@ -1,6 +1,4 @@
 __pycache__/
-main.py
-main2.py
-main3.py
-main4.py
+test_data/
+main*
 tempCodeRunnerFile.py

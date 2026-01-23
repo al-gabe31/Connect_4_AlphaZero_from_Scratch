@@ -23,6 +23,9 @@ def tanh(value):
 def sigmoid(value):
     return 1 / (1 + pow(math.e, -1 * value))
 
+def softmax(value, values_list):
+    return pow(math.e, value) / sum([pow(math.e, values_list[i]) for i in range(len(values_list))])
+
 def activation_derivative(func_name, value):
     if func_name == default_activation:
         return 1
@@ -72,7 +75,7 @@ class Node:
     def __repr__(self):
         return f'{self.alias}: {self.value} [z: {self.z_value} | delta: {self.delta_value} | bias: {self.bias}] ==> {[self.suceeding_conns[i][1] for i in range(len(self.suceeding_conns))]}'
 
-    def connect_preceding_nodes(self, node_list, weight_list: list[float] = None, auto_update_values = False):
+    def connect_preceding_nodes(self, node_list, weight_list: list[float] = None, auto_update_values = False, layer_node_list = None):
         for i in range(len(node_list)):
             # adding new connections for preceding nodes
             self.preceding_conns.append([node_list[i], DEFAULT_WEIGHT if weight_list is None else weight_list[i]])
@@ -82,9 +85,9 @@ class Node:
 
         # don't forget to update value with the new connections
         if auto_update_values:
-            self.value = self.calc_value()
+            self.value = self.calc_value(layer_node_list=layer_node_list)
 
-    def connect_suceeding_nodes(self, node_list, weight_list: list[float] = None, auto_update_values = False):
+    def connect_suceeding_nodes(self, node_list, weight_list: list[float] = None, auto_update_values = False, layer_node_list = None):
         for i in range(len(node_list)):
             # adding new connections for suceeding nodes
             self.suceeding_conns.append([node_list[i], DEFAULT_WEIGHT if weight_list is None else weight_list[i]])
@@ -94,11 +97,17 @@ class Node:
 
             # don't forget to update value of the suceeding node
             if auto_update_values:
-                node_list[i].value = node_list[i].calc_value()
+                node_list[i].value = node_list[i].calc_value(layer_node_list=layer_node_list)
         
     # returns the activation value of a node (doesn't actually set it)
-    def calc_value(self):
-        return self.activation_function(self.get_z_value())
+    def calc_value(self, layer_node_list = None):
+        if self.activation_function == softmax:
+            # activation value of this node relies on the z-values of the other nodes in the same layer
+            values_list = [layer_node_list[i].get_z_value() for i in range(len(layer_node_list))]
+
+            return self.activation_function(self.get_z_value(), values_list)
+        else:
+            return self.activation_function(self.get_z_value())
     
     def get_z_value(self):
         summation = 0
@@ -111,7 +120,10 @@ class Node:
     
     def get_delta_value(self, in_output_layer: bool = False, y_value: float = None):
         if in_output_layer:
-            return 2 * (self.value - y_value) * activation_derivative(self.activation_function, self.get_z_value())
+            if self.activation_function == softmax:
+                return self.value - y_value # activation - actual
+            else:
+                return 2 * (self.value - y_value) * activation_derivative(self.activation_function, self.get_z_value())
         else:
             summation = 0
 
@@ -173,7 +185,7 @@ class Node_Layer:
                 # if no weight initializaiton is provided, use the provided weights instead
                 curr_weight_list = weight_matrix[i]
             
-            self.node_list[i].connect_preceding_nodes(preceding_layer.node_list, weight_list=curr_weight_list, auto_update_values=auto_update_values)
+            self.node_list[i].connect_preceding_nodes(preceding_layer.node_list, weight_list=curr_weight_list, auto_update_values=auto_update_values, layer_node_list=self.node_list)
 
     def update_preceding_weights(self, preceding_layer, weight_matrix: list[list[float]] = None):
         # first clear all connections this layer has with the previous layer and vice versa
@@ -198,12 +210,12 @@ class Node_Layer:
                 # if no weight initialization is provided, use the provided weights instead
                 curr_weight_list = weight_matrix[i]
             
-            self.node_list[i].connect_suceeding_nodes(suceeding_layer.node_list, weight_list=curr_weight_list, auto_update_values=auto_update_values)
+            self.node_list[i].connect_suceeding_nodes(suceeding_layer.node_list, weight_list=curr_weight_list, auto_update_values=auto_update_values, layer_node_list=self.node_list)
 
     # updates activation values for all nodes in this layer
     def calc_layer_values(self):
         for i in range(len(self.node_list)):
-            self.node_list[i].value = self.node_list[i].calc_value()
+            self.node_list[i].value = self.node_list[i].calc_value(layer_node_list=self.node_list)
 
     # updates z values for all nodes in this layer
     def calc_layer_z_values(self):
