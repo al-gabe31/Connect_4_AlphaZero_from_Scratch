@@ -176,7 +176,8 @@ class Node_Layer:
             node_list[i].bias = bias_list[i] if bias_list is not None else DEFAULT_BIAS
 
     def __str__(self):
-        result = f'{self.alias}:\n'
+        activation_name = '' if self.node_list[0].activation_function == default_activation else f' [{self.node_list[0].activation_function.__name__}]'
+        result = f'{self.alias}{activation_name}:\n'
 
         for i in range(len(self.node_list)):
             result += f'\t{str(self.node_list[i])}\n'
@@ -184,7 +185,8 @@ class Node_Layer:
         return result
     
     def __repr__(self):
-        result = f'{self.alias}:\n'
+        activation_name = '' if self.node_list[0].activation_function == default_activation else f' [{self.node_list[0].activation_function.__name__}]'
+        result = f'{self.alias}{activation_name}:\n'
 
         for i in range(len(self.node_list)):
             result += f'\t{str(self.node_list[i])}'
@@ -217,16 +219,14 @@ class Node_Layer:
     def update_preceding_weights(
             self, 
             preceding_layer, 
-            weight_matrix: list[list[float]] = None
+            weight_matrix: list[list[float]] = None,
+            preceding_col_start_index: int = 0, # useful for multitask learning where the preceding layer connects to multiple suceeding layers
         ):
-        # first clear all connections this layer has with the previous layer and vice versa
-        for i in range(len(self.node_list)):
-            self.node_list[i].preceding_conns.clear()
-        for i in range(len(preceding_layer.node_list)):
-            preceding_layer.node_list[i].suceeding_conns.clear()
+        for row_index in range(len(weight_matrix)):
+            for col_index in range(len(weight_matrix[row_index])):
+                self.node_list[row_index].preceding_conns[col_index][1] = weight_matrix[row_index][col_index]
 
-        # reconnecting the 2 layers with the update weights
-        self.connect_preceding_layer(preceding_layer, weight_matrix, auto_update_values=False)
+                preceding_layer.node_list[col_index].suceeding_conns[row_index + preceding_col_start_index][1] = weight_matrix[row_index][col_index]
 
     def connect_suceeding_layer(
             self, 
@@ -329,7 +329,7 @@ class Neural_Network:
             self,
             input_layer_num_nodes: int,
             hidden_layer_dimensions: list[int],
-            output_layer_num_nodes: int,
+            output_layer_dimensions: list[int], # multiple output layers supports multitask learning
             alias: str = '',
             activation_functions = None, # list of activation functions (length should match # of layers - 1)
             weight_normalizations = None, # list of weight normalizations (length should match # of layers - 1)
@@ -337,28 +337,32 @@ class Neural_Network:
         ):
 
         self.alias = alias
-        self.fan_in = input_layer_num_nodes
-        self.fan_out = output_layer_num_nodes
+        self.fan_in = input_layer_num_nodes # number of input nodes
+        self.fan_out = sum(output_layer_dimensions) # number of output nodes
 
         # initializing the input, hidden, and output layers
         self.input_layer: Node_Layer = Node_Layer(
             [Node(alias=f'n1{i + 1}') for i in range(input_layer_num_nodes)],
-            alias='l1'
+            alias='INPUT l1'
         )
 
         self.hidden_layers: list[Node_Layer] = []
         for i in range(len(hidden_layer_dimensions)):
             new_hidden_layer = Node_Layer(
                 [Node(alias=f'n{i + 2}{j + 1}') for j in range(hidden_layer_dimensions[i])],
-                alias=f'l{i + 2}'
+                alias=f'HIDDEN l{i + 2}'
             )
 
             self.hidden_layers.append(new_hidden_layer)
 
-        self.output_layer: Node_Layer = Node_Layer(
-            [Node(alias=f'n{2 + len(hidden_layer_dimensions)}{i + 1}') for i in range(output_layer_num_nodes)],
-            alias=f'l{2 + len(hidden_layer_dimensions)}'
-        )
+        self.output_layers: list[Node_Layer] = []
+        for i in range(len(output_layer_dimensions)):
+            new_output_layer = Node_Layer(
+                [Node(alias=f'n{i + len(hidden_layer_dimensions) + 2}{j + 1}') for j in range(output_layer_dimensions[i])],
+                alias=f'OUTPUT l{i + len(hidden_layer_dimensions) + 2}'
+            )
+
+            self.output_layers.append(new_output_layer)
 
         # setting up the activation functions for each layer
         if activation_functions is None:
@@ -366,38 +370,45 @@ class Neural_Network:
         
         for i in range(len(activation_functions)):
             if i < len(self.hidden_layers): # setting activation functions for the hidden layers
-                self.hidden_layers[0].set_activation_function(activation_functions[i])
-            elif i == len(self.hidden_layers): # setting activation function for the output layer
-                self.output_layer.set_activation_function(activation_functions[i])
+                self.hidden_layers[i].set_activation_function(activation_functions[i])
+            else: # setting activation function for the output layers
+                self.output_layers[i - len(hidden_layer_dimensions)].set_activation_function(activation_functions[i])
             # any overflow will be ignored
 
         # setting up the connections layer by layer
         if weight_normalizations is None:
             # handles situations where weight_normalization is passed as None
-            weight_normalizations = [None for i in range(1 + len(self.hidden_layers))] # just fill weight normalizations with None (will just set all weights to 1)
-        for i in range(1 + len(self.hidden_layers) - len(weight_normalizations)): # handles siuations where there aren't enough weight normalizations in the list
+            weight_normalizations = [None for i in range(len(self.hidden_layers) + len(self.output_layers))] # just fill weight normalizations with None (will just set all weights to 1)
+        for i in range(len(self.hidden_layers) + len(self.output_layers) - len(weight_normalizations)): # handles situations where there aren't enough weight normalizations in the list
             weight_normalizations.append(None) # adds any missing weight normalizations as None
 
         for i in range(len(weight_normalizations)):
-            if i == 0 and len(self.hidden_layers) != 0: # input layer to the first hidden layer (if it exists)
+            if i == 0 and len(self.hidden_layers) != 0: # input layer to the first hidden layer (assuming it exists)
                 self.input_layer.connect_suceeding_layer(self.hidden_layers[i], weight_normalization=weight_normalizations[i], fan_in=self.fan_in, fan_out=self.fan_out)
-            elif i == 0 and len(self.hidden_layers) == 0: # input layer to outpuer layer (there are no hidden layers)
-                self.input_layer.connect_suceeding_layer(self.output_layer, weight_normalization=weight_normalizations[i], fan_in=self.fan_in, fan_out=self.fan_out)
+            elif len(self.hidden_layers) == 0: # input layer to output layers (there are no hidden layers)
+                self.input_layer.connect_suceeding_layer(self.output_layers[i], weight_normalization=weight_normalizations[i], fan_in=self.fan_in, fan_out=self.fan_out)
             elif i < len(self.hidden_layers): # hidden layer to hidden layer
                 self.hidden_layers[i - 1].connect_suceeding_layer(self.hidden_layers[i], weight_normalization=weight_normalizations[i], fan_in=self.fan_in, fan_out=self.fan_out)
-            elif i == len(self.hidden_layers): # last hidden layer to output layer
-                self.hidden_layers[-1].connect_suceeding_layer(self.output_layer, weight_normalization=weight_normalizations[i], fan_in=self.fan_in, fan_out=self.fan_out)
+            elif i >= len(self.hidden_layers) and i < len(self.hidden_layers) + len(self.output_layers): # last hidden layer to output layers
+                self.hidden_layers[-1].connect_suceeding_layer(self.output_layers[i - len(self.hidden_layers)], weight_normalization=weight_normalizations[i], fan_in=self.fan_in, fan_out=self.fan_out)
 
         # setting up the biases for each layer that isn't the input layer
         if bias_lists is None: # if bias_lists is None, just set all biases to DEFAULT_BIAS
             bias_lists = []
-            for i in range(len(self.hidden_layers)):
+
+        # populate bias_lists to match the number of hidden & output layers
+        for i in range(len(self.hidden_layers)):
+            if i >= len(bias_lists): # not enough biases for the hidden layers
                 bias_lists.append([DEFAULT_BIAS for j in range(len(self.hidden_layers[i].node_list))])
-            bias_lists.append([DEFAULT_BIAS for i in range(len(self.output_layer.node_list))])
+
+        for i in range(len(self.hidden_layers), len(self.hidden_layers) + len(self.output_layers)):
+            if i >= len(bias_lists): # not enough biases for the output layers
+                bias_lists.append([DEFAULT_BIAS for j in range(len(self.output_layers[i - len(self.hidden_layers)].node_list))])
         
         for i in range(len(self.hidden_layers)):
             self.hidden_layers[i].set_bias_list(bias_lists[i])
-        self.output_layer.set_bias_list(bias_lists[len(self.hidden_layers)])
+        for i in range(len(self.output_layers)):
+            self.output_layers[i].set_bias_list(bias_lists[i + len(self.hidden_layers)])
 
     def __str__(self):
         result = f'{self.alias}:\n'
@@ -406,7 +417,8 @@ class Neural_Network:
         for i in range(len(self.hidden_layers)):
             result += f'{str(self.hidden_layers[i])}\n'
 
-        result += f'{str(self.output_layer)}'
+        for i in range(len(self.output_layers)):
+            result += f'{str(self.output_layers[i])}\n'
 
         return result
     
@@ -417,7 +429,8 @@ class Neural_Network:
         for i in range(len(self.hidden_layers)):
             result += f'{str(self.hidden_layers[i])}\n'
 
-        result += f'{str(self.output_layer)}'
+        for i in range(len(self.output_layers)):
+            result += f'{str(self.output_layers[i])}\n'
 
         return result
     
@@ -425,68 +438,97 @@ class Neural_Network:
             self, 
             input_set: list[float]
         ):
+        # initializing inputs in the input layer
         for i in range(len(input_set)):
             self.input_layer.node_list[i].value = input_set[i]
 
     def forward_pass(self):
+        # forward pass hidden layers
         for i in range(len(self.hidden_layers)):
             self.hidden_layers[i].calc_layer_values()
             self.hidden_layers[i].calc_layer_z_values()
 
-        self.output_layer.calc_layer_values()
-        self.output_layer.calc_layer_z_values()
+        # forward pass output layers
+        for i in range(len(self.output_layers)):
+            self.output_layers[i].calc_layer_values()
+            self.output_layers[i].calc_layer_z_values()
 
     def backwardpass(
             self, 
-            y_values: list[float]
+            y_values: list[list[float]] # each inner list represents an output set for multitask learning
         ):
-        self.output_layer.calc_delta_values(is_output_layer=True, y_values=y_values)
+        # calculate delta values for output layers
+        for i in range(len(y_values)): # splits output sets and plugs them into their corresponding output layer
+            self.output_layers[i].calc_delta_values(is_output_layer=True, y_values=y_values[i])
 
+        # calculating delta values for the hidden layers from right to left
         for i in range(len(self.hidden_layers) - 1, -1, -1):
             self.hidden_layers[i].calc_delta_values()
 
     def backpropagation_weights(self):
+        # 3D matrix that contains all partial derivatives with respect to a specific weight
+        # dimensions: l x n x m
+            # l: number of hidden + output layers
+            # n: number of nodes in that layer
+            # m: number of preceding connections that node has
         weight_partial_derivatives = []
 
-        curr_weight_partials = np.zeros((len(self.output_layer.node_list), len(self.hidden_layers[-1].node_list)))
+        # getting weight partial derivatives starting from the output layers
+        for output_layer_index in range(len(self.output_layers) - 1, -1, -1): # "for each output layer..." (starting from the "last" output layer)
+            # initializing dimensions of current weight partials matrix
+            n_nodes = len(self.output_layers[output_layer_index].node_list) # number of nodes in an output layer
+            m_nodes = len(self.input_layer.node_list) if len(self.hidden_layers) == 0 else len(self.hidden_layers[-1].node_list) # number of nodes in its preceding layer (either input or last hidden layer)
+            curr_weight_partials = np.zeros((n_nodes, m_nodes)) # dimension: n_nodes x m_nodes
+            
+            for i in range(len(self.output_layers[output_layer_index].node_list)): # "for each node in that output layer..."
+                for j in range(len(self.output_layers[output_layer_index].node_list[i].preceding_conns)): # "for each preceding connection of that node..."
+                    # calculating partial derivative with respect to a specific weight: a_L-1 * delta_L
+                    curr_weight_partials[i][j] = self.output_layers[output_layer_index].node_list[i].preceding_conns[j][0].value * self.output_layers[output_layer_index].node_list[i].delta_value
 
-        # getting weight partial derivatives starting from the output layer
-        for i in range(len(self.output_layer.node_list)):
-            for j in range(len(self.output_layer.node_list[i].preceding_conns)):
-                curr_weight_partials[i][j] = self.output_layer.node_list[i].preceding_conns[j][0].value * self.output_layer.node_list[i].delta_value
-        weight_partial_derivatives.insert(0, curr_weight_partials)
+            weight_partial_derivatives.insert(0, curr_weight_partials)
         
-        # doing the same for the hidden layer (besides the one preceding the input layer)
+        # doing the same for the hidden layer (besides the one after the input layer)
         for layer_index in range(len(self.hidden_layers) - 1, 0, -1): # stops at the left-most hidden layer (doesn't iterate past it)
-            curr_weight_partials = np.zeros((len(self.hidden_layers[layer_index].node_list), len(self.hidden_layers[layer_index-1].node_list)))
+            n_nodes = len(self.hidden_layers[layer_index].node_list) # number of nodes in that hidden layer
+            m_nodes = len(self.hidden_layers[layer_index-1].node_list) # number of nodes in its preceding layer
+            curr_weight_partials = np.zeros((n_nodes, m_nodes))
             
             for i in range(len(self.hidden_layers[layer_index].node_list)):
                 for j in range(len(self.hidden_layers[layer_index].node_list[i].preceding_conns)):
+                    # calculating partial derivative with respect to a specific weight: a_L-1 * delta_L 
                     curr_weight_partials[i][j] = self.hidden_layers[layer_index].node_list[i].preceding_conns[j][0].value * self.hidden_layers[layer_index].node_list[i].delta_value
             weight_partial_derivatives.insert(0, curr_weight_partials)
 
         # finally getting the partial derivaties from the left-most hidden layer
-        curr_weight_partials = np.zeros((len(self.hidden_layers[0].node_list), len(self.input_layer.node_list)))
+        if len(self.hidden_layers) > 1: # first have to check that there even is a hidden layer
+            n_nodes = len(self.hidden_layers[0].node_list) # number of nodes in the first hidden layer
+            m_nodes = len(self.input_layer.node_list) # number of nodes in the input layer
+            curr_weight_partials = np.zeros((n_nodes, m_nodes))
 
-        for i in range(len(self.hidden_layers[0].node_list)):
-            for j in range(len(self.hidden_layers[0].node_list[i].preceding_conns)):
-                curr_weight_partials[i][j] = self.hidden_layers[0].node_list[i].preceding_conns[j][0].value * self.hidden_layers[0].node_list[i].delta_value
-        weight_partial_derivatives.insert(0, curr_weight_partials)
+            for i in range(len(self.hidden_layers[0].node_list)):
+                for j in range(len(self.hidden_layers[0].node_list[i].preceding_conns)):
+                    curr_weight_partials[i][j] = self.hidden_layers[0].node_list[i].preceding_conns[j][0].value * self.hidden_layers[0].node_list[i].delta_value
+            weight_partial_derivatives.insert(0, curr_weight_partials)
 
         return weight_partial_derivatives
     
     def backproagation_biases(self):
+        # 2D matrix that contains all partial derivatives with respect to a specific bias
+        # dimensions: l x n
+            # l: number of hidden + output layers
+            # n: number of nodes in that layer
         bias_partial_derivatives = []
 
-        curr_bias_partials = np.zeros(len(self.output_layer.node_list))
+        # getting bias partial derivatives starting from the output layers
+        for output_layer_index in range(len(self.output_layers) -1, -1, -1): # "for each output layer..." (starting from the "last" output layer)
+            curr_bias_partials = np.zeros(len(self.output_layers[output_layer_index].node_list))
 
-        # getting bias partial derivatives starting from the output layer
-        for i in range(len(self.output_layer.node_list)):
-            curr_bias_partials[i] = self.output_layer.node_list[i].delta_value
-        bias_partial_derivatives.insert(0, curr_bias_partials)
+            for i in range(len(self.output_layers[output_layer_index].node_list)): # "for each node in that output layer..."
+                curr_bias_partials[i] = self.output_layers[output_layer_index].node_list[i].delta_value
+            bias_partial_derivatives.insert(0, curr_bias_partials)
 
         # doing the same for the hidden layers
-        for layer_index in range(len(self.hidden_layers) - 1, -1, -1): # goes through each hiden layer from right to left
+        for layer_index in range(len(self.hidden_layers) - 1, -1, -1): # goes through each hidden layer from right to left
             curr_bias_partials = np.zeros(len(self.hidden_layers[layer_index].node_list))
 
             for i in range(len(self.hidden_layers[layer_index].node_list)):
@@ -496,26 +538,30 @@ class Neural_Network:
         return bias_partial_derivatives
     
     def clear_neural_network(self):
-        self.output_layer.clear_layer_data()
+        # clearing output layers
+        for i in range(len(self.output_layers) - 1, -1, -1):
+            self.output_layers[i].clear_layer_data()
 
+        # clearing hidden layers
         for i in range(len(self.hidden_layers) - 1, -1, -1):
             self.hidden_layers[i].clear_layer_data()
 
+        # clearing input layers
         self.input_layer.clear_layer_data()
 
     def learn_data(
             self, 
             input_list: list[list[float]], 
-            expected_list: list[list[float]], 
-            learning_rate: float = 0.001
+            expected_list: list[list[list[float]]], 
+            learning_rate: float = 0.001, 
         ):
         n = len(input_list) # number of input sets
         weight_partials = [] # will be used to update weights
         bias_partials = [] # will be used to update biases
 
-        # run forward and backpropagation for each input set and expected output
+        # run forward and backpropagation for each input set and expected output sets
         for i in range(len(input_list)):
-            # 1. inserts input into the insert layer
+            # 1. inserts input set into the input layer
             self.input_values(input_list[i])
 
             # 2. forward pass data down the neural network
@@ -528,7 +574,7 @@ class Neural_Network:
             curr_weight_partials = self.backpropagation_weights()
             curr_bias_partials = self.backproagation_biases()
 
-            # if weight and bias partials list is currently empty, just append them to their respective ararys
+            # if weight and bias partials list is currently empty, just append them to their respective arrays
             if i == 0:
                 for j in range(len(curr_weight_partials)):
                     weight_partials.append(curr_weight_partials[j])
@@ -542,6 +588,8 @@ class Neural_Network:
                     bias_partials[j] += curr_bias_partials[j]
 
             # 5. clear the neural network before moving on to the next input set
+            print('BEFORE CLEARING')
+            print(self)
             self.clear_neural_network()
 
         # 6. averages the tallies in the weight and bias partials
@@ -552,7 +600,7 @@ class Neural_Network:
 
         # 7. updates the weights and biases
         # updating the weights below
-        for i in range(len(self.hidden_layers) + 1):
+        for i in range(len(self.hidden_layers) + len(self.output_layers)):
             # updating weights in hidden layers
             if i < len(self.hidden_layers):
                 new_weights = self.hidden_layers[i].get_weights_matrix() - (learning_rate * weight_partials[i])
@@ -561,31 +609,33 @@ class Neural_Network:
                     self.hidden_layers[i].update_preceding_weights(self.input_layer, new_weights)
                 else: # otherwise, the preceding layer will just be another hidden layer
                     self.hidden_layers[i].update_preceding_weights(self.hidden_layers[i-1], new_weights)
-            # updating the weights in the output layer
-            elif i == len(self.hidden_layers):
-                new_weights = self.output_layer.get_weights_matrix() - (learning_rate * weight_partials[i])
 
-                # if there are hidden layers, the output layer's preceding layer will be a hidden layer
+            # updating the weights in the output layers
+            elif i >= len(self.hidden_layers) and i < len(self.hidden_layers) + len(self.output_layers):
+                new_weights = self.output_layers[i - len(self.hidden_layers)].get_weights_matrix() - (learning_rate * weight_partials[i])
+                preceding_col_start_index = sum([len(self.output_layers[layer_index].node_list) for layer_index in range(0, i - len(self.hidden_layers))])
+
+                # if there are hidden layers, the output layers' preceding layer will be a hidden layer
                 if len(self.hidden_layers) > 0:
-                    self.output_layer.update_preceding_weights(self.hidden_layers[-1], new_weights)
-                # otherwise, the output layer's preceding layer will be the input layer
+                    self.output_layers[i - len(self.hidden_layers)].update_preceding_weights(self.hidden_layers[-1], new_weights, preceding_col_start_index=preceding_col_start_index)
+                # otherwise, the output layers' preceding layer will be the input layer
                 else:
-                    self.output_layer.update_preceding_weights(self.input_layer, new_weights)
+                    self.output_layers[i - len(self.hidden_layers)].update_preceding_weights(self.input_layer, new_weights, preceding_col_start_index=preceding_col_start_index)
 
         # updating the biases below
-        for i in range(len(self.hidden_layers) + 1):
+        for i in range(len(self.hidden_layers) + len(self.output_layers)):
             # updating the biases in the hidden layers
             if i < len(self.hidden_layers):
                 new_biases = self.hidden_layers[i].get_bias() - (learning_rate * bias_partials[i])
 
                 for j in range(len(self.hidden_layers[i].node_list)):
                     self.hidden_layers[i].node_list[j].bias = new_biases[j]
-            # updating the biases in the output layer
-            elif i == len(self.hidden_layers):
-                new_biases = self.output_layer.get_bias() - (learning_rate * bias_partials[i])
+            # updating the biases in the output layers
+            elif i >= len(self.hidden_layers) and i < len(self.hidden_layers) + len(self.output_layers):
+                new_biases = self.output_layers[i - len(self.hidden_layers)].get_bias() - (learning_rate * bias_partials[i])
 
-                for j in range(len(self.output_layer.node_list)):
-                    self.output_layer.node_list[j].bias = new_biases[j]
+                for j in range(len(self.output_layers[i - len(self.hidden_layers)].node_list)):
+                    self.output_layers[i - len(self.hidden_layers)].node_list[j].bias = new_biases[j]
 
     def get_output(
             self, 
@@ -594,17 +644,22 @@ class Neural_Network:
         self.input_values(input_set)
         self.forward_pass()
 
-        output = []
-        for i in range(len(self.output_layer.node_list)):
-            output.append(self.output_layer.node_list[i].value)
-        output = np.array(output)
+        outputs = [] # 2D list of output sets for multitask learning
+        for layer_index in range(len(self.output_layers)):
+            curr_layer_output = [] # current output set for a specific output layer
+            
+            for node_index in range(len(self.output_layers[layer_index])):
+                curr_layer_output.append(self.output_layers[layer_index].node_list[node_index].value)
+            curr_layer_output = np.array(curr_layer_output)
+                
+            outputs.append(curr_layer_output)
         
-        return output
+        return outputs
     
     def multi_run_learn_data(
             self, 
             input_list: list[list[float]], 
-            expected_list: list[float], 
+            expected_list: list[list[list[float]]], 
             learning_rate: float = 0.001, 
             epochs: int = 1000
         ):
