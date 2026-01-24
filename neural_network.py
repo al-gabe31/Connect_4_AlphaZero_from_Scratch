@@ -500,7 +500,7 @@ class Neural_Network:
             weight_partial_derivatives.insert(0, curr_weight_partials)
 
         # finally getting the partial derivaties from the left-most hidden layer
-        if len(self.hidden_layers) > 1: # first have to check that there even is a hidden layer
+        if len(self.hidden_layers) >= 1: # first have to check that there even is a hidden layer
             n_nodes = len(self.hidden_layers[0].node_list) # number of nodes in the first hidden layer
             m_nodes = len(self.input_layer.node_list) # number of nodes in the input layer
             curr_weight_partials = np.zeros((n_nodes, m_nodes))
@@ -588,8 +588,6 @@ class Neural_Network:
                     bias_partials[j] += curr_bias_partials[j]
 
             # 5. clear the neural network before moving on to the next input set
-            print('BEFORE CLEARING')
-            print(self)
             self.clear_neural_network()
 
         # 6. averages the tallies in the weight and bias partials
@@ -648,7 +646,7 @@ class Neural_Network:
         for layer_index in range(len(self.output_layers)):
             curr_layer_output = [] # current output set for a specific output layer
             
-            for node_index in range(len(self.output_layers[layer_index])):
+            for node_index in range(len(self.output_layers[layer_index].node_list)):
                 curr_layer_output.append(self.output_layers[layer_index].node_list[node_index].value)
             curr_layer_output = np.array(curr_layer_output)
                 
