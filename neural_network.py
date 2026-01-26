@@ -50,6 +50,16 @@ def he_normal(fan_in, fan_out = None):
     sigma = math.sqrt(2.0 / fan_in)
     return random.gauss(0.0, sigma)
 
+# returns a vector of size vector_size
+# for every index stored in hit_list, set the value in the resulting vector at that index to hit_flag
+def flag_setter(vector_size: int, hit_list: list[int], not_hit_flag: int = 0, hit_flag: int = 1):
+    result = [not_hit_flag for i in range(vector_size)]
+
+    for i in range(len(hit_list)):
+        result[hit_list[i]] = hit_flag
+
+    return result
+
 class Node:
     def __init__(
             self, 
@@ -114,13 +124,19 @@ class Node:
     # returns the activation value of a node (doesn't actually set it)
     def calc_value(
             self, 
-            layer_node_list = None
+            layer_node_list = None,
+            masking_bits: list[int] = None, # example [0, 0, 1, 0, 1]
+            is_masked: bool = False
         ):
         if self.activation_function == softmax:
+            if masking_bits is None:
+                masking_bits = flag_setter(vector_size=len(layer_node_list), hit_list=[], not_hit_flag=0, hit_flag=1)
+            
             # activation value of this node relies on the z-values of the other nodes in the same layer
-            values_list = [layer_node_list[i].get_z_value() for i in range(len(layer_node_list))]
+            # if a particular output node is marked as masked, set its z-value to negative infinity instead
+            values_list = [layer_node_list[i].get_z_value() if masking_bits[i] == 0 else -math.inf for i in range(len(layer_node_list))]
 
-            return self.activation_function(self.get_z_value(), values_list)
+            return self.activation_function(self.get_z_value() if not is_masked else -math.inf, values_list)
         else:
             return self.activation_function(self.get_z_value())
     
@@ -252,9 +268,16 @@ class Node_Layer:
             self.node_list[i].connect_suceeding_nodes(suceeding_layer.node_list, weight_list=curr_weight_list, auto_update_values=auto_update_values, layer_node_list=self.node_list)
 
     # updates activation values for all nodes in this layer
-    def calc_layer_values(self):
+    def calc_layer_values(
+            self,
+            masking_bits: list[int] = None # example [0, 0, 1, 0, 1]
+        ):
         for i in range(len(self.node_list)):
-            self.node_list[i].value = self.node_list[i].calc_value(layer_node_list=self.node_list)
+            if masking_bits is None:
+                self.node_list[i].value = self.node_list[i].calc_value(layer_node_list=self.node_list)
+            else:
+                is_masked = True if masking_bits[i] == 1 else False
+                self.node_list[i].value = self.node_list[i].calc_value(layer_node_list=self.node_list, masking_bits=masking_bits, is_masked=is_masked)
 
     # updates z values for all nodes in this layer
     def calc_layer_z_values(self):
@@ -442,7 +465,10 @@ class Neural_Network:
         for i in range(len(input_set)):
             self.input_layer.node_list[i].value = input_set[i]
 
-    def forward_pass(self):
+    def forward_pass(
+            self,
+            masking_setting: list[list[int]] = None # example [[1, 0], [[0, 0, 1, 0, 1], [0]]]
+        ):
         # forward pass hidden layers
         for i in range(len(self.hidden_layers)):
             self.hidden_layers[i].calc_layer_values()
@@ -450,7 +476,13 @@ class Neural_Network:
 
         # forward pass output layers
         for i in range(len(self.output_layers)):
-            self.output_layers[i].calc_layer_values()
+            if masking_setting is None:
+                self.output_layers[i].calc_layer_values()
+            else:
+                # if the layer is masked as idenfitifed by the i-th index of the 1st list in masking_setting...
+                # take the i-th list from the 2nd list in masking_setting and set that as the masking_bits
+                layer_is_masked = True if masking_setting[0][i] == 1 else False
+                self.output_layers[i].calc_layer_values(masking_bits=None if not layer_is_masked else masking_setting[1][i])
             self.output_layers[i].calc_layer_z_values()
 
     def backwardpass(
@@ -637,10 +669,11 @@ class Neural_Network:
 
     def get_output(
             self, 
-            input_set: list[float]
+            input_set: list[float],
+            masking_setting: list[list[int]] = None # example [[1, 0], [[0, 0, 1, 0, 1], [0]]]
         ):
         self.input_values(input_set)
-        self.forward_pass()
+        self.forward_pass(masking_setting=masking_setting)
 
         outputs = [] # 2D list of output sets for multitask learning
         for layer_index in range(len(self.output_layers)):
