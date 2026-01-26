@@ -145,3 +145,17 @@ class Game_State:
         )
 
         return new_game_state
+
+    # returns the a list of ints for the inputs in a neural network
+    def one_hot_state_encoding(self):
+        result = []
+        
+        for unit in [1, -1, 0]:
+            for row_index in range(NUM_ROWS):
+                for col_index in range(NUM_COLS):
+                    # if self.grid[row_index][col_index] == unit:
+                    #     print(f'{unit} HIT at ({row_index}, {col_index})')
+                    
+                    result.append(1 if self.grid[row_index][col_index] == unit else 0)
+
+        return result
