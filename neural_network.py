@@ -707,11 +707,23 @@ class Neural_Network:
             epochs: int = 1000,
             regularization: str = '',
             lambda_const: int = 1,
+            sampling_rate: float = 1,
         ):
+
+        # implementation for mini-batch gradient descent
+        n = len(input_list) # total number of inputs
+        combined = [[input_list[i], expected_list[i]] for i in range(n)] # combining input & expected into a single list
+        n_samples = math.floor(sampling_rate * n) # the number of entries per sample
+        
         for epoch in range(epochs):
+            # get new sample
+            sampled = random.sample(combined, n_samples)
+            input_sampled = [sampled[i][0] for i in range(n_samples)]
+            expected_sampled = [sampled[i][1] for i in range(n_samples)]
+            
             self.learn_data(
-                input_list=input_list, 
-                expected_list=expected_list, 
+                input_list=input_sampled, 
+                expected_list=expected_sampled, 
                 learning_rate=learning_rate,
                 regularization=regularization,
                 lambda_const=lambda_const
