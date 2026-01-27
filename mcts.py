@@ -166,7 +166,7 @@ class MCTS_Tree:
             neural_network=neural_network
         )
         self.curr_root_node = self.base_root_node
-        self.memory_bank = [] # 2D list where each inner list contains the follow: (s, p, v)
+        self.memory_bank = [] # 2D list where each inner list contains the follow: [s, p, v]
         # s: current state of the game
             # game states are represented using the game_history (list of ints)
         # p: MCTS visit ratios from a particular game state
@@ -246,3 +246,52 @@ class MCTS_Tree:
             move: int
         ):
         self.curr_root_node = self.curr_root_node.children_connections[move]
+
+    def make_move(
+            self,
+            max_iterations: int,
+            max_depth: int,
+            exploration_constant: float = 1,
+        ):
+        # first check if the current root node has a game state where it's game over
+        if self.curr_root_node.game_state.game_over == True:
+            return # do nothing
+        
+        # run tree search for the current root node
+        self.tree_search(
+            max_iterations=max_iterations,
+            max_depth=max_depth,
+            exploration_constant=exploration_constant
+        )
+
+        # before making its move, record important information into memory bank for learning
+        curr_state = self.curr_root_node.game_state.game_history
+        curr_policies = self.get_curr_root_visit_ratios()
+        curr_value = None # will be replaced with 1, -1, or 0 after the game has been finished
+        curr_memory = [curr_state, curr_policies, curr_value]
+        self.memory_bank.append(curr_memory)
+
+        # make the next move based on which next state got the most visits
+        max_visits = max(curr_policies)
+        chosen_move = curr_policies.index(max_visits)
+        self.reroot(chosen_move)
+
+        return chosen_move # returning chosen move
+    
+    def decide_winner(
+            self,
+            winner: int = None # 1: player 1 wins, -1: player 2 wins, 0 tie
+        ):
+        if winner is not None:
+            # winner explicitly provided
+            curr_player = -winner # we might have to think in opposites here
+            for i in range(len(self.memory_bank)):
+                self.memory_bank[i][2] = curr_player
+                curr_player *= -1 # alternate player
+        elif self.curr_root_node.game_state.game_over == True: # another check that current root node is a finished game
+            # get the winner based on the game result of current root node
+            # this only works if current root node is a terminal game state
+            curr_player = -self.curr_root_node.game_state.outcome # again have to think in opposites here
+            for i in range(len(self.memory_bank)):
+                self.memory_bank[i][2] = curr_player
+                curr_player *= -1 # alternating player
