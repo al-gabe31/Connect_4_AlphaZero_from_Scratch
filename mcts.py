@@ -21,7 +21,7 @@ class MCTS_Node:
 
         # information about relationships with other nodes
         self.parent_node = parent_node # None for the root node
-        self.children_connections = [None for i in range(NUM_COLS)] # list of MCTS_Node where the index specifies the specific move to get to that state
+        self.children_connections: list[MCTS_Node] = [None for i in range(NUM_COLS)] # list of MCTS_Node where the index specifies the specific move to get to that state
         self.expandable_flags = [1 if self.game_state.is_valid_move(i) else 0 for i in range(NUM_COLS)] # list of 1's and 0's where a 1 means a valid move that hasn't been added to the tree yet. if it's all 0's, then this node is fully expanded.
 
     def __str__(self):
@@ -150,3 +150,98 @@ class MCTS_Node:
 
         if self.parent_node is not None:
             self.parent_node.backpropagation(value=-1 * value) # don't forget to switch sign when moving up to parent
+
+class MCTS_Tree:
+    def __init__(
+            self,
+            root_history: list,
+            neural_network: Neural_Network,
+        ):
+        # initialize the root_node of the tree given root_history
+        root_game_state = Game_State(root_history)
+        self.base_root_node = MCTS_Node(
+            game_state=root_game_state,
+            parent_node=None,
+            neural_network=neural_network
+        )
+        self.curr_root_node = self.base_root_node
+        self.memory_bank = [] # 2D list where each inner list contains the follow: (s, p, v)
+        # s: current state of the game
+            # game states are represented using the game_history (list of ints)
+        # p: MCTS visit ratios from a particular game state
+        # v: eventual game results (can be initialized to None but later changed)
+
+    def tree_search(
+            self,
+            max_iterations: int,
+            max_depth: int,
+            exploration_constant: float = 1,
+        ):
+
+        # making sure that the current root node has been evaluated
+        if self.curr_root_node.game_state.game_over == True:
+            # can't call evaluation on a terminal node
+            raise ValueError('EXCEPTION - Initializing search on a terminal node')
+        self.curr_root_node.evaluation() # initializes value & policy head for the current root node
+
+        # repeat iterations until the current root node's num visits reaches max_iterations
+        while(self.curr_root_node.num_visits < max_iterations):
+
+            new_iteration = True # let's us know if we made it back to the current root node
+            curr_node = self.curr_root_node # keeps track of which node we're currently in during the search
+            
+            # repeat selection, expansion, & evaluation until you've reached:
+                # terminal node (game result taken)
+                # max_depth reached
+            curr_depth = 0
+            while(curr_node.game_state.game_over == False and curr_depth < max_depth):
+                # selection stage
+                if new_iteration: # just increment curr_root_node's num visits by 1
+                    curr_node = self.curr_root_node # bring back curr_node to the current root node of the tree
+                    self.curr_root_node.num_visits += 1
+                    new_iteration = False
+                else: # set curr_node as the selected child
+                    curr_node = curr_node.selection(exploration_constant=exploration_constant)
+                    curr_depth += 1
+
+                # expansion stage
+                expanded_node = None
+                if curr_node is None: # only happens if we called selection on a terminal node earlier
+                    raise ValueError('EXCEPTION - Called selection on a terminal node')
+                elif curr_node.game_state.game_over == False: 
+                    # can only expand on a non-terminal node
+                    expanded_node = curr_node.expansion() # get expanded node to be evaluated later on
+
+                # evaluation stage
+                # expanded_node is None only if curr_node is fully epanded or if its a terminal node
+                if expanded_node is not None:
+                    expanded_node.evaluation()
+
+            # backpropagation stage
+            if curr_node.game_state.game_over == False:
+                # backpropagate its value head
+                curr_node.backpropagation(curr_node.value_head)
+            elif curr_node.game_state.game_over == True and curr_node.game_state.outcome == 0:
+                # backpropogate 0
+                curr_node.backpropagation(0)
+            else:
+                curr_node.backpropagation(1)
+
+    def get_curr_root_visit_ratios(self):
+        parent_visits = self.curr_root_node.num_visits
+        visit_ratios = []
+
+        for i in range(len(self.curr_root_node.children_connections)):
+            if self.curr_root_node.children_connections[i] is None:
+                visit_ratios.append(0)
+            else:
+                curr_child = self.curr_root_node.children_connections[i]
+                visit_ratios.append(curr_child.num_visits / parent_visits)
+
+        return visit_ratios
+    
+    def reroot(
+            self,
+            move: int
+        ):
+        self.curr_root_node = self.curr_root_node.children_connections[move]
