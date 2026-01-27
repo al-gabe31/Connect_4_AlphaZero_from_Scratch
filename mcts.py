@@ -282,16 +282,21 @@ class MCTS_Tree:
             self,
             winner: int = None # 1: player 1 wins, -1: player 2 wins, 0 tie
         ):
-        if winner is not None:
-            # winner explicitly provided
-            curr_player = -winner # we might have to think in opposites here
-            for i in range(len(self.memory_bank)):
-                self.memory_bank[i][2] = curr_player
-                curr_player *= -1 # alternate player
-        elif self.curr_root_node.game_state.game_over == True: # another check that current root node is a finished game
-            # get the winner based on the game result of current root node
-            # this only works if current root node is a terminal game state
-            curr_player = -self.curr_root_node.game_state.outcome # again have to think in opposites here
-            for i in range(len(self.memory_bank)):
-                self.memory_bank[i][2] = curr_player
-                curr_player *= -1 # alternating player
+        if winner is None:
+            winner = self.curr_root_node.game_state.outcome
+
+        for i in range(len(self.memory_bank)):
+            if winner == 1 and len(self.memory_bank[i][0]) % 2 == 0:
+                # player 1 wins and currently player 1's turn
+                self.memory_bank[i][2] = -1
+            elif winner == 1 and len(self.memory_bank[i][0]) % 2 == 1:
+                # player 1 wins and currently player 2's turn
+                self.memory_bank[i][2] = 1
+            elif winner == -1 and len(self.memory_bank[i][0]) % 2 == 0:
+                # player 2 wins and currently player 1's turn
+                self.memory_bank[i][2] = 1
+            elif winner == -1 and len(self.memory_bank[i][0]) % 2 == 1:
+                # player 2 wins and currently player 2's turn
+                self.memory_bank[i][2] = -1
+            elif winner == 0:
+                self.memory_bank[i][2] = 0
