@@ -586,6 +586,8 @@ class Neural_Network:
             input_list: list[list[float]], 
             expected_list: list[list[list[float]]], 
             learning_rate: float = 0.001, 
+            regularization: str = '',
+            lambda_const: int = 1, 
         ):
         n = len(input_list) # number of input sets
         weight_partials = [] # will be used to update weights
@@ -631,9 +633,19 @@ class Neural_Network:
         # 7. updates the weights and biases
         # updating the weights below
         for i in range(len(self.hidden_layers) + len(self.output_layers)):
+            # getting regularization term
+            reg_penalty = 0
+            
+            if regularization.upper() == 'L1' or regularization.upper() == 'LASSO': # lasso regression
+                reg_penalty = learning_rate * lambda_const * (np.sign(self.hidden_layers[i].get_weights_matrix() if i < len(self.hidden_layers) else self.output_layers[i - len(self.hidden_layers)].get_weights_matrix()))
+            elif regularization.upper() == 'L2' or regularization.upper() == 'RIDGE': # ridge regression
+                reg_penalty = 2 * learning_rate * lambda_const * (self.hidden_layers[i].get_weights_matrix() if i < len(self.hidden_layers) else self.output_layers[i - len(self.hidden_layers)].get_weights_matrix())
+            elif regularization.upper() == 'ELASTIC NET':
+                reg_penalty = (2 * learning_rate * lambda_const * (self.hidden_layers[i].get_weights_matrix() if i < len(self.hidden_layers) else self.output_layers[i - len(self.hidden_layers)].get_weights_matrix())) + (learning_rate * lambda_const * (np.sign(self.hidden_layers[i].get_weights_matrix() if i < len(self.hidden_layers) else self.output_layers[i - len(self.hidden_layers)].get_weights_matrix())))
+            
             # updating weights in hidden layers
             if i < len(self.hidden_layers):
-                new_weights = self.hidden_layers[i].get_weights_matrix() - (learning_rate * weight_partials[i])
+                new_weights = self.hidden_layers[i].get_weights_matrix() - (learning_rate * weight_partials[i]) - reg_penalty
 
                 if i == 0: # first hidden layer (its preceding layer is the input layer)
                     self.hidden_layers[i].update_preceding_weights(self.input_layer, new_weights)
@@ -642,7 +654,7 @@ class Neural_Network:
 
             # updating the weights in the output layers
             elif i >= len(self.hidden_layers) and i < len(self.hidden_layers) + len(self.output_layers):
-                new_weights = self.output_layers[i - len(self.hidden_layers)].get_weights_matrix() - (learning_rate * weight_partials[i])
+                new_weights = self.output_layers[i - len(self.hidden_layers)].get_weights_matrix() - (learning_rate * weight_partials[i]) - reg_penalty
                 preceding_col_start_index = sum([len(self.output_layers[layer_index].node_list) for layer_index in range(0, i - len(self.hidden_layers))])
 
                 # if there are hidden layers, the output layers' preceding layer will be a hidden layer
@@ -692,7 +704,15 @@ class Neural_Network:
             input_list: list[list[float]], 
             expected_list: list[list[list[float]]], 
             learning_rate: float = 0.001, 
-            epochs: int = 1000
+            epochs: int = 1000,
+            regularization: str = '',
+            lambda_const: int = 1,
         ):
         for epoch in range(epochs):
-            self.learn_data(input_list=input_list, expected_list=expected_list, learning_rate=learning_rate)
+            self.learn_data(
+                input_list=input_list, 
+                expected_list=expected_list, 
+                learning_rate=learning_rate,
+                regularization=regularization,
+                lambda_const=lambda_const
+            )
