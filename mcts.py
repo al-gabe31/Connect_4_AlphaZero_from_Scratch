@@ -144,12 +144,13 @@ class MCTS_Node:
     def backpropagation(
             self,
             value: float,
+            recursive_depth: int,
         ):
         self.total_value += value
         self.mean_value = self.total_value / self.num_visits
 
-        if self.parent_node is not None:
-            self.parent_node.backpropagation(value=-1 * value) # don't forget to switch sign when moving up to parent
+        if self.parent_node is not None and recursive_depth > 0:
+            self.parent_node.backpropagation(value=-1 * value, recursive_depth=recursive_depth-1) # don't forget to switch sign when moving up to parent
 
 class MCTS_Tree:
     def __init__(
@@ -220,12 +221,12 @@ class MCTS_Tree:
             # backpropagation stage
             if curr_node.game_state.game_over == False:
                 # backpropagate its value head
-                curr_node.backpropagation(curr_node.value_head)
+                curr_node.backpropagation(curr_node.value_head, curr_depth)
             elif curr_node.game_state.game_over == True and curr_node.game_state.outcome == 0:
                 # backpropogate 0
-                curr_node.backpropagation(0)
+                curr_node.backpropagation(0, curr_depth)
             else:
-                curr_node.backpropagation(1)
+                curr_node.backpropagation(1, curr_depth)
 
     def get_curr_root_visit_ratios(self):
         parent_visits = self.curr_root_node.num_visits
