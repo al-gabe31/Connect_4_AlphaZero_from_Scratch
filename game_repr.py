@@ -138,6 +138,11 @@ class Game_State:
                     outcome = player
                     game_over = True
 
+        # check if the game ended in a draw
+        if len(new_game_history) == NUM_COLS * NUM_ROWS and outcome == 0:
+            # i.e. board is full and outcome didn't change to either 1 or -1
+            game_over = True
+
         new_game_state = Game_State(
             game_history=new_game_history,
             outcome=outcome,
