@@ -23,8 +23,12 @@ def tanh(value):
 def sigmoid(value):
     return 1 / (1 + pow(math.e, -1 * value))
 
-def softmax(value, values_list):
-    return pow(math.e, value) / sum([pow(math.e, values_list[i]) for i in range(len(values_list))])
+def softmax(
+        value, 
+        values_list, 
+        temperature:int = 1
+    ):
+    return pow(math.e, value/temperature) / sum([pow(math.e, values_list[i]/temperature) for i in range(len(values_list))])
 
 def activation_derivative(func_name, value):
     if func_name == default_activation:
