@@ -271,11 +271,17 @@ class MCTS_Tree:
         curr_memory = [curr_state, curr_policies, curr_value]
         self.memory_bank.append(curr_memory)
 
-        # make the next move based on which next state got the most visits
-        max_visits = max(curr_policies)
-        chosen_move = curr_policies.index(max_visits)
-        self.reroot(chosen_move)
+        # randomly make the next move based on visit ratios and temperature
+        transformed_probs = [curr_policies[i] if curr_policies[i] != 0 else -math.inf for i in range(len(curr_policies))] # masking 0 probabilities as negative infinity before passing into the softmax function
+        num_pieces = len(curr_state) # number of pieces currently on the board
+        a_setting = 0.05
+        b_setting = 5
+        move_probabilities: list[float] = [softmax(transformed_probs[i], transformed_probs, temperature=max(a_setting, pow(math.e, -1 * num_pieces / b_setting))) for i in range(len(transformed_probs))]
 
+        # select a move given the probabilities above
+        chosen_move = random.choices([i for i in range(NUM_COLS)], move_probabilities, k=1)[0]
+        self.reroot(chosen_move)
+        
         return chosen_move # returning chosen move
     
     def decide_winner(
