@@ -205,6 +205,8 @@ def retrieve_neural_network(
     # either alias OR version is empty
     elif (alias is not None and version is None) or (alias is None and version is not None):
         raise ValueError(f'EXCEPTION - both alias & version can\'t be None')
+
+
     
     # ==================== RETRIEVING INFORMATION TO INITIALIZE NEURAL NETWORK ==================== #
     sql_code = f"""
@@ -662,3 +664,19 @@ def update_neural_network(
             updated_bias_sql,
             [(new_bias_val, layer_id, node_num) for layer_id, node_num, new_bias_val in updated_biases]
         )
+
+def delete_neural_network(
+        database_location:str,
+        neural_network_id:int
+):
+    sql_code = f"""
+    DELETE FROM Neural_Networks
+    WHERE neural_network_id = {neural_network_id}
+    """
+
+    # running sql_code
+    with sqlite3.connect(database_location) as conn:
+        conn.execute('PRAGMA foreign_keys = ON;')
+        cursor = conn.cursor()
+
+        cursor.executescript(sql_code)
