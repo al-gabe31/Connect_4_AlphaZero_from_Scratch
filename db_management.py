@@ -623,6 +623,8 @@ def update_neural_network(
             [(new_weight_val, layer_id, row_num, col_num) for layer_id, row_num, col_num, new_weight_val in updated_weights]
         )
 
+        
+
     # ==================== UPDATING VALUES IN LAYER_BIASES ==================== #
     # creating the list of tupples we'll use to update Layer_Biases
     updated_biases:list[tuple] = [] # (layer_id, node_num, new_bias_val)
