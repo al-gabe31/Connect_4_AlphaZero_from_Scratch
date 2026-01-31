@@ -430,3 +430,233 @@ def retrieve_neural_network(
 
     # don't forget to return the resulting neural network
     return result_neural_network
+
+def update_neural_network(
+        database_location:str,
+        neural_network:Neural_Network,
+        version:str = None,
+        neural_network_id:int = None
+):
+    # ==================== VALIDATING INPUTS FOR UPDATE NEURAL NETWORK ==================== #
+    alias = neural_network.alias
+    neural_network_update_date = str(datetime.datetime.now())
+
+    # making sure that neural_network_id OR alias+versoin is provided
+    if alias is None and version is None and neural_network_id is None:
+        raise ValueError('EXCEPTION - must provide either neural_network_id OR alias + version')
+    
+    # neural_network_id is provided
+    elif neural_network_id is not None:
+        validation_sql = f"""
+        SELECT
+            alias,
+            version
+        FROM neural_networks
+        WHERE neural_network_id = {neural_network_id}
+        """
+
+        with sqlite3.connect(database_location) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            cursor.execute(validation_sql)
+            rows = cursor.fetchone()
+
+            # checking if the result was empty
+            if rows is None:
+                raise ValueError(f'EXCEPTION - can\'t find neural network with neural_network_id {neural_network_id}')
+            else:
+                # unpact the resulting query
+                alias, version = (rows[0], rows[1])
+
+    # either alias OR version is empty
+    elif (alias is not None and version is None) or (alias is None and version is not None):
+        raise ValueError(f'EXCEPTION - both alias & version can\'t be None')
+    
+    # alias & version is provided (validate that the combination exists in the database)
+    elif alias is not None and version is not None:
+        validation_sql = f"""
+        SELECT neural_network_id
+        FROM neural_networks
+        WHERE
+            alias = '{alias}'
+            AND version = '{version}'
+        """
+
+        with sqlite3.connect(database_location) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            cursor.execute(validation_sql)
+            rows = cursor.fetchone()
+
+            # checking if the result was empty
+            if rows is None:
+                raise ValueError(f"EXCEPTION - can\'t find neural_network with alias '{alias}' and version '{version}'")
+            else:
+                neural_network_id = rows[0]
+
+    # validating the neural network we're updating in the database matches the information for each layer
+    # gettin information for each layer we're trying to update
+    validation_sql = f"""
+    SELECT
+        layer_id,
+        layer_index,
+        num_nodes,
+        layer_type,
+        activation_type
+    FROM neural_network_layers
+    WHERE neural_network_id = {neural_network_id}
+    ORDER BY layer_id ASC
+    """
+
+    validation_result = []
+
+    with sqlite3.connect(database_location) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(validation_sql)
+        rows = cursor.fetchall()
+
+        for i in range(len(rows)):
+            validation_result.append((rows[i]['layer_id'], rows[i]['layer_index'], rows[i]['num_nodes'], rows[i]['layer_type'], rows[i]['activation_type']))
+
+    # making sure the number of hidden & output layers matches
+    num_hidden_layers = 0
+    num_output_layers = 0
+
+    for i in range(len(validation_result)):
+        if validation_result[i][3] == 'hidden':
+            num_hidden_layers += 1
+        elif validation_result[i][3] == 'output':
+            num_output_layers += 1
+
+    if len(neural_network.hidden_layers) != num_hidden_layers:
+        raise ValueError(f"EXCCEPTION - Neural Network has different amount of hidden layers compared to that in the database [{len(neural_network.hidden_layers)} vs {num_hidden_layers}]")
+    if len(neural_network.output_layers) != num_output_layers:
+        raise ValueError(f"EXCEPTION - Neural Network has different amount of output layers compared to that in the database [{len(neural_network.output_layers)} vs {num_output_layers}]")
+    
+
+
+    # checking num nodes & activation function in each layer
+    for i in range(len(validation_result)):
+        if validation_result[i][3] == 'input': # comparing input layers
+            # node counts don't match
+            if len(neural_network.input_layer.node_list) != int(validation_result[i][2]):
+                raise ValueError(f"EXCEPTION - Neural Network's input layer num nodes {len(neural_network.input_layer.node_list)} doesn''t match database's input layer num nodes {validation_result[i][2]}")
+            
+            # activation functions don't match
+            if neural_network.input_layer.node_list[0].activation_function.__name__ != validation_result[i][4]:
+                raise ValueError(f"EXCEPTION - Neural Network's input layer activation function {neural_network.input_layer.node_list[0].activation_function.__name__} doesn't match database's input layer activation function {validation_result[i][4]}")
+        elif validation_result[i][3] == 'hidden': # comparing hidden layers
+            # node counts don't match
+            if len(neural_network.hidden_layers[validation_result[i][1]].node_list) != int(validation_result[i][2]):
+                raise ValueError(f"EXCEPTION - Neural Network's hidden layer [i = {i}] num nodes {len(neural_network.hidden_layers[validation_result[i][1]].node_list)} doesn't match database's hidden layer [i = {i}] num nodes {validation_result[i][2]}")
+            
+            # activation functions don't match
+            if neural_network.hidden_layers[validation_result[i][1]].node_list[0].activation_function.__name__ != validation_result[i][4]:
+                raise ValueError(f"EXCEPTION - Neural Network's hidden layer [i = {i}] activation function {neural_network.hidden_layers[validation_result[i][1]].node_list[0].activation_function.__name__} doesn't match database's hidden layer [i = {i}] activation function {validation_result[i][4]}")
+        elif validation_result[i][3] == 'output': # comparing output layers
+            # node counts don't match
+            if len(neural_network.output_layers[validation_result[i][1]].node_list) != validation_result[i][2]:
+                raise ValueError(f"EXCEPTION - Neural Network's output layer [i = {i}] num nodes {len(neural_network.output_layers[validation_result[i][1]].node_list)} doesn't match database's output layer [i = {i}] num nodes {validation_result[i][2]}")
+            
+            # activation functions don't match
+            if neural_network.output_layers[validation_result[i][1]].node_list[0].activation_function.__name__ != validation_result[i][4]:
+                raise ValueError(f"EXCEPTION - Neural Network's output layer [i = {i}] activation function {neural_network.output_layers[validation_result[i][1]].node_list[0].activation_function.__name__} doesn't match database's output layer [i = {i}] activation function {validation_result[i][4]}")
+            
+
+            
+    # ==================== UPDATING update_date in NEURAL_NETWORKS ==================== #
+    updated_update_date_sql = f"""
+    UPDATE Neural_Networks
+    SET update_date = '{neural_network_update_date}'
+    WHERE neural_network_id = {neural_network_id}
+    """
+
+    with sqlite3.connect(database_location) as conn:
+        conn.execute('PRAGMA foreign_keys = ON;')
+        cursor = conn.cursor()
+
+        cursor.execute(updated_update_date_sql)
+
+
+
+    # ==================== UPDATING VALUES IN LAYER_WEIGHTS ==================== #
+    # creating the list of tuples we'll use to update Layer_Weights
+    updated_weights:list[tuple] = [] # (layer_id, row_num, col_num, new_weight_val)
+
+    for i in range(len(validation_result)):
+        if validation_result[i][3] in ('hidden', 'output'):
+            curr_layer_id = validation_result[i][0]
+            curr_weight_matrix = None
+
+            # getting curr_weight matrix
+            if validation_result[i][3] == 'hidden':
+                curr_weight_matrix = neural_network.hidden_layers[validation_result[i][1]].get_weights_matrix()
+            elif validation_result[i][3] == 'output':
+                curr_weight_matrix = neural_network.output_layers[validation_result[i][1]].get_weights_matrix()
+
+            for row_num in range(len(curr_weight_matrix)):
+                for col_num in range(len(curr_weight_matrix[row_num])):
+                    new_weight_val = curr_weight_matrix[row_num][col_num]
+                    new_weights = (curr_layer_id, row_num, col_num, new_weight_val)
+                    updated_weights.append(new_weights)
+
+    # finally updating weights in the Layer_Weights table
+    update_weight_sql = f"""
+    UPDATE Layer_Weights
+    SET weight_val = ?
+    WHERE
+        layer_id = ?
+        AND row_num = ?
+        AND col_num = ?
+    """
+
+    with sqlite3.connect(database_location) as conn:
+        conn.execute('PRAGMA foreign_keys = ON;')
+        cursor = conn.cursor()
+
+        cursor.executemany(
+            update_weight_sql,
+            [(new_weight_val, layer_id, row_num, col_num) for layer_id, row_num, col_num, new_weight_val in updated_weights]
+        )
+
+    # ==================== UPDATING VALUES IN LAYER_BIASES ==================== #
+    # creating the list of tupples we'll use to update Layer_Biases
+    updated_biases:list[tuple] = [] # (layer_id, node_num, new_bias_val)
+
+    for i in range(len(validation_result)):
+        if validation_result[i][3] in ('hidden', 'output'):
+            curr_layer_id = validation_result[i][0]
+            curr_bias_list = None
+
+            # getting curr_bias_list
+            if validation_result[i][3] == 'hidden':
+                curr_bias_list = neural_network.hidden_layers[validation_result[i][1]].get_bias()
+            elif validation_result[i][3] == 'output':
+                curr_bias_list = neural_network.output_layers[validation_result[i][1]].get_bias()
+
+            for node_num in range(len(curr_bias_list)):
+                new_bias_val = curr_bias_list[node_num]
+                new_biases = (curr_layer_id, node_num, new_bias_val)
+                updated_biases.append(new_biases)
+
+    # finally updating biases in the Layer_Biases table
+    updated_bias_sql = f"""
+    UPDATE Layer_Biases
+    SET bias_val = ?
+    WHERE
+        layer_id = ?
+        AND node_num = ?
+    """
+
+    with sqlite3.connect(database_location) as conn:
+        conn.execute('PRAGMA foreign_keys = ON;')
+        cursor = conn.cursor()
+
+        cursor.executemany(
+            updated_bias_sql,
+            [(new_bias_val, layer_id, node_num) for layer_id, node_num, new_bias_val in updated_biases]
+        )
