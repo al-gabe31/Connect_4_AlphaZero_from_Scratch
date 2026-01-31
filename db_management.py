@@ -169,9 +169,43 @@ def store_neural_network(
 
 def retrieve_neural_network(
         database_location: str,
-        alias: str,
-        version: str
+        alias: str = None,
+        version: str = None,
+        neural_network_id: int = None,
     ):
+    # ==================== PRE-STEP ==================== #
+    # making sure that neural_network_id OR alias+version is provided
+    if alias is None and version is None and neural_network_id is None:
+        raise ValueError('EXCEPTION - must provide either neural_network_id OR alias + version')
+    
+    # neural_network_id is provided
+    elif neural_network_id is not None:
+        validation_sql = f"""
+        SELECT
+            alias,
+            version
+        FROM neural_networks
+        WHERE neural_network_id = {neural_network_id}
+        """
+
+        with sqlite3.connect(database_location) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            cursor.execute(validation_sql)
+            rows = cursor.fetchone()
+
+            # checking if the result was empty
+            if rows is None:
+                raise ValueError(f'EXCEPTION - can\'t find neural network with neural_network_id {neural_network_id}')
+            else:
+                # unpack the resulting query
+                alias, version = (rows[0], rows[1])
+
+    # either alias OR version is empty
+    elif (alias is not None and version is None) or (alias is None and version is not None):
+        raise ValueError(f'EXCEPTION - both alias & version can\'t be None')
+    
     # ==================== RETRIEVING INFORMATION TO INITIALIZE NEURAL NETWORK ==================== #
     sql_code = f"""
     SELECT
@@ -203,6 +237,10 @@ def retrieve_neural_network(
 
         cursor.execute(sql_code)
         rows = cursor.fetchall()
+
+        # checking if the resulting query was empty
+        if len(rows) == 0:
+            raise ValueError(f"EXCEPTION - can\'t find neural network with alias '{alias}' & version '{version}'")
 
         for i in range(len(rows)):
             query_result.append((rows[i]['layer_id'], rows[i]['layer_index'], rows[i]['num_nodes'], rows[i]['layer_type'], rows[i]['activation_type']))
