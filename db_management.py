@@ -764,11 +764,11 @@ def record_self_play(
 
         # inserting all turns of the new game into Game_Turns
         for i in range(len(game_turns_data)):
-            turn_number, game_state, mcst_visit_ratios, value_head = game_turns_data[i]
-            new_game_turns = (game_hist_id, turn_number, game_state, mcst_visit_ratios, value_head)
+            turn_number, game_state, mcts_visit_ratios, value_head = game_turns_data[i]
+            new_game_turns = (game_hist_id, turn_number, game_state, mcts_visit_ratios, value_head)
 
             cursor.execute(
-                'INSERT INTO Game_Turns (game_hist_id, turn_number, game_state, mcst_visit_ratios, value_head) VALUES (?, ?, ?, ?, ?)',
+                'INSERT INTO Game_Turns (game_hist_id, turn_number, game_state, mcts_visit_ratios, value_head) VALUES (?, ?, ?, ?, ?)',
                 new_game_turns
             )
 
@@ -792,7 +792,7 @@ def retrieve_game_data(
         for i in range(len(rows)):
             # first, translate game history into the one-hot state encoding that the neural network can use as inputs
             one_hot_game_state = Game_State.static_one_hot_state_encoding(json.loads(rows[i]['game_state']))
-            query_result.append((one_hot_game_state, json.loads(rows[i]['mcst_visit_ratios']), [rows[i]['value_head']]))
+            query_result.append((one_hot_game_state, json.loads(rows[i]['mcts_visit_ratios']), [rows[i]['value_head']]))
 
     
 
