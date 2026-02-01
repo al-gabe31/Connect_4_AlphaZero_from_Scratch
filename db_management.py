@@ -1,8 +1,11 @@
 # code for handling interactions with the Connect_4 database and all its tables
 
 from neural_network import *
+from mcts import *
 import datetime
 import sqlite3
+import json
+import time
 
 def store_neural_network(
         neural_network: Neural_Network, 
@@ -680,3 +683,94 @@ def delete_neural_network(
         cursor = conn.cursor()
 
         cursor.executescript(sql_code)
+
+def record_self_play(
+        database_location:str,
+        neural_network_id:int,
+        max_iterations:int,
+        max_depth:int,
+        exploration_constant:int,
+        description:str = '[empty description]',
+        priors_rounding:int = 5,
+        debugging:bool = False
+):
+    # ==================== RETRIEVING NEURAL NETWORK FROM DATABASE & INITIALIZING OBJECTS ==================== #
+    if debugging:
+        print(f"Starting process for '{description}'")
+    
+    # retrieve the neural network from the database
+    neural_network = retrieve_neural_network(
+        database_location=database_location,
+        neural_network_id=neural_network_id
+    )
+
+    # initializing the monte carlo tree
+    game_tree = MCTS_Tree(
+        root_history=[],
+        neural_network=neural_network
+    )
+    game_history = []
+
+
+
+    # ==================== SIMULATING A FULL GAME ==================== #
+    curr_turn = 1
+    curr_player = 'Red'
+
+    start_time = None
+    end_time = None
+
+    while(game_tree.curr_root_node.game_state.game_over == False):
+        # if debugging setting is True, prints the move chosen & time elapased per move
+        if debugging:
+            start_time = time.perf_counter()
+        
+        move_chosen = game_tree.make_move(
+            max_iterations=max_iterations,
+            max_depth=max_depth,
+            exploration_constant=exploration_constant
+        )
+
+        if debugging:
+            end_time = time.perf_counter()
+            print(f'Turn #{curr_turn} | {curr_player} ==> Move {move_chosen} [{round(end_time - start_time, 3)}s]')
+
+        # update stats
+        curr_turn += 1
+        curr_player = 'Red' if curr_player == 'Yellow' else 'Yellow'
+        game_history.append(move_chosen)
+
+    # don't forget to crown the winner
+    game_tree.decide_winner()
+
+
+
+    # ==================== INSERTING INTO Games_History ==================== #
+    game_turns_data = [(len(game_state) + 1, json.dumps(game_state), json.dumps([round(prob, priors_rounding) for prob in policy_head]), value_head) for game_state, policy_head, value_head in game_tree.memory_bank]
+    creation_date = str(datetime.datetime.now())
+    new_games_history = (neural_network_id, neural_network_id, description, creation_date)
+
+    # inserting into Games_History & Game_Turns
+    with sqlite3.connect(database_location) as conn:
+        conn.execute('PRAGMA foreign_keys = ON;')
+        cursor = conn.cursor()
+
+        # inserting new game into Games_History
+        cursor.execute(
+            'INSERT INTO Games_History (player_1_id, player_2_id, description, creation_date) VALUES (?, ?, ?, ?)',
+            new_games_history
+        )
+        game_hist_id = cursor.lastrowid # getting the game_hist_id of the row that was just inserted into Games_History
+
+        # inserting all turns of the new game into Game_Turns
+        for i in range(len(game_turns_data)):
+            turn_number, game_state, mcst_visit_ratios, value_head = game_turns_data[i]
+            new_game_turns = (game_hist_id, turn_number, game_state, mcst_visit_ratios, value_head)
+
+            cursor.execute(
+                'INSERT INTO Game_Turns (game_hist_id, turn_number, game_state, mcst_visit_ratios, value_head) VALUES (?, ?, ?, ?, ?)',
+                new_game_turns
+            )
+
+    if debugging:
+        print(f"Finished process for '{description}'")
