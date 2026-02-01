@@ -151,16 +151,39 @@ class Game_State:
 
         return new_game_state
 
-    # returns the a list of ints for the inputs in a neural network
+    # returns a list of ints for the inputs in a neural network
     def one_hot_state_encoding(self):
         result = []
         
         for unit in [1, -1, 0]:
             for row_index in range(NUM_ROWS):
                 for col_index in range(NUM_COLS):
-                    # if self.grid[row_index][col_index] == unit:
-                    #     print(f'{unit} HIT at ({row_index}, {col_index})')
-                    
                     result.append(1 if self.grid[row_index][col_index] == unit else 0)
+
+        return result
+    
+    # static method version of one_hot_state_encoding
+    @staticmethod
+    def static_one_hot_state_encoding(game_history: list[int]):
+        # ==================== BUILDING THE GRID ==================== #
+        grid: list[list[int]] = [[0 for i in range(NUM_COLS)] for j in range(NUM_ROWS)]
+        curr_player = 1 # 1 = player 1 | -1 = player 2
+        col_bottom_indexes = [NUM_ROWS - 1 for i in range(NUM_COLS)] # quick indexes for the bottom of a column
+
+        # goes through each turn in game_history and places a piee at the bottom of the column
+        for column_placement in game_history:
+            grid[col_bottom_indexes[column_placement]][column_placement] = curr_player # places piece at the bottom of the grid
+            col_bottom_indexes[column_placement] -= 1 # raises the bottom of the column (reminder: row 0 is the top row)
+            curr_player *= -1 # switches players
+
+
+
+        # ==================== GETTING ONE HOT STATE ENCODING ==================== #
+        result: list[int] = []
+
+        for unit in [1, -1, 0]:
+            for row_index in range(NUM_ROWS):
+                for col_index in range(NUM_COLS):
+                    result.append(1 if grid[row_index][col_index] == unit else 0)
 
         return result
