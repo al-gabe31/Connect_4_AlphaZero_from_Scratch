@@ -774,3 +774,39 @@ def record_self_play(
 
     if debugging:
         print(f"Finished process for '{description}'")
+
+def retrieve_game_data(
+        database_location:str,
+        retrieve_sql:str
+):
+    # ==================== RETRIEVE GAME DATA ==================== #
+    query_result = []
+
+    with sqlite3.connect(database_location) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(retrieve_sql)
+        rows = cursor.fetchall()
+
+        for i in range(len(rows)):
+            # first, translate game history into the one-hot state encoding that the neural network can use as inputs
+            one_hot_game_state = Game_State.static_one_hot_state_encoding(json.loads(rows[i]['game_state']))
+            query_result.append((one_hot_game_state, json.loads(rows[i]['mcst_visit_ratios']), [rows[i]['value_head']]))
+
+    
+
+    # ==================== SPLITTING INPUTS & OUTPUTS ==================== #
+    input_list: list[list[float]] = []
+    expected_list: list[list[list[float]]] = []
+
+    # going through the query result and inserting them into either the input or expected sets
+    for i in range(len(query_result)):
+        curr_input = query_result[i][0]
+        curr_expected = [query_result[i][1], query_result[i][2]]
+
+        input_list.append(curr_input)
+        expected_list.append(curr_expected)
+
+    # returning input & expected lists
+    return input_list, expected_list
