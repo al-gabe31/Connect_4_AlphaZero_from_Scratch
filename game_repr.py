@@ -155,7 +155,9 @@ class Game_State:
     def one_hot_state_encoding(self):
         result = []
         
-        for unit in [1, -1, 0]:
+        input_plane_order = [1, -1] if len(self.game_history) % 2 == 0 else [-1, 1]
+        
+        for unit in input_plane_order:
             for row_index in range(NUM_ROWS):
                 for col_index in range(NUM_COLS):
                     result.append(1 if self.grid[row_index][col_index] == unit else 0)
@@ -181,7 +183,9 @@ class Game_State:
         # ==================== GETTING ONE HOT STATE ENCODING ==================== #
         result: list[int] = []
 
-        for unit in [1, -1, 0]:
+        input_plane_order = [1, -1] if len(game_history) % 2 == 0 else [-1, 1]
+
+        for unit in input_plane_order:
             for row_index in range(NUM_ROWS):
                 for col_index in range(NUM_COLS):
                     result.append(1 if grid[row_index][col_index] == unit else 0)
