@@ -121,6 +121,22 @@ class MCTS_Node:
         self.expandable_flags[greatest_score_index] = 0 # meaning the node for that move has already been expanded (added)
 
         return new_node
+
+    # fully expands node
+    def full_expansion(self):
+        for i in range(len(self.expandable_flags)):
+            if self.expandable_flags[i] == 1: # found a move that hasn't been expanded yet
+                # creates the new child node
+                new_game_state = self.game_state.make_move(i)
+                new_node = MCTS_Node(
+                    game_state=new_game_state,
+                    parent_node=self,
+                    neural_network=self.neural_network
+                )
+
+                # updates information for this node
+                self.children_connections[i] = new_node
+                self.expandable_flags[i] = 0
     
     # calculate value and policy head for this node
     def evaluation(self):
