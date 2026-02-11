@@ -810,3 +810,99 @@ def retrieve_game_data(
 
     # returning input & expected lists
     return input_list, expected_list
+
+
+
+def training_loop(
+        self,
+        database_location:str,
+        neural_network_id:int,
+        batch_name:str,
+        max_iterations:int,
+        max_depth:int,
+        exploration_constant:int,
+        num_self_games:int,
+        training_query:str,
+        learning_rate:int,
+        num_epochs:int,
+        regularization:str,
+        lambda_const:int,
+        sampling_rate:int,
+):
+    # ==================== GENERATIN SELF-PLAY DATA ==================== #
+    # retrieving neural network
+    neural_network = retrieve_neural_network(
+        database_location=database_location,
+        neural_network_id=neural_network_id
+    )
+
+    # initializing the monte carlo tree
+    tree = MCTS_Tree(
+        root_history=[],
+        neural_network=neural_network
+    )
+
+    # inserting multiple games
+    for i in range(1, num_self_games + 1):
+        description = f'Batch {batch_name} - Game {i}'
+
+        if i == 1:
+            print(i, end='')
+        else:
+            print(f'==>{i}', end='')
+
+        record_self_play(
+            database_location=database_location,
+            neural_network_id=neural_network_id,
+            max_iterations=max_iterations,
+            max_depth=max_depth,
+            exploration_constant=exploration_constant,
+            description=description
+        )
+
+
+
+    # ==================== LEARNING GAMES ==================== #
+    # retrieving games from the database
+    query_results = []
+
+    with sqlite3.connect(database_location) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(training_query)
+        rows = cursor.fetchall()
+
+        for i in range(len(rows)):
+            query_results.append((rows[i]['game_hist_id'], rows[i]['turn_number'], rows[i]['game_state'], rows[i]['mcts_visit_ratios'], rows[i]['value_head']))
+
+    # translating our query_result to something the neural network can understand
+    translated_query = []
+    for i in range(len(query_results)):
+        translated_game_state = Game_State.static_one_hot_state_encoding(json.loads(query_results[i][2]))
+        translated_mcts_ratios = json.loads(query_results[i][3])
+        translated_query.append((translated_game_state, translated_mcts_ratios, query_results[i][4]))
+
+    # setting up our inputs and expected outputs
+    inputs = [translated_query[i][0] for i in range(len(translated_query))]
+    expected = [[translated_query[i][1], [translated_query[i][2]]] for i in range(len(translated_query))]
+
+    # learning data
+    neural_network.multi_run_learn_data(
+        input_list=inputs,
+        expected_list=expected,
+        learning_rate=learning_rate,
+        epochs=num_epochs,
+        regularization=regularization,
+        lambda_const=lambda_const,
+        sampling_rate=sampling_rate
+    )
+
+
+
+    # ==================== RECORDING NEURAL NETWORK ==================== #
+    update_neural_network(
+        database_location=database_location,
+        neural_network=neural_network,
+        neural_network_id=neural_network_id
+    )
