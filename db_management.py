@@ -814,7 +814,6 @@ def retrieve_game_data(
 
 
 def training_loop(
-        self,
         database_location:str,
         neural_network_id:int,
         batch_name:str,
@@ -847,7 +846,7 @@ def training_loop(
         description = f'Batch {batch_name} - Game {i}'
 
         if i == 1:
-            print(i, end='')
+            print(description, end='')
         else:
             print(f'==>{i}', end='')
 
@@ -859,6 +858,7 @@ def training_loop(
             exploration_constant=exploration_constant,
             description=description
         )
+    print(f'==>end')
 
 
 
