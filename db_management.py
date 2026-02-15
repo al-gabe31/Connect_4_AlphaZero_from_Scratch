@@ -2,6 +2,7 @@
 
 from neural_network import *
 from mcts import *
+from game_window import *
 import datetime
 import sqlite3
 import json
@@ -906,3 +907,60 @@ def training_loop(
         neural_network=neural_network,
         neural_network_id=neural_network_id
     )
+
+
+
+def view_game(
+        database_location:str,
+        game_hist_id:int
+):
+    # ==================== PRE-STEP ==================== #
+    # checking if the database has the given game_hist_id
+    validation_sql = f"""
+    select count(game_hist_id)
+    from Games_History
+    where game_hist_id = {game_hist_id}
+    """
+
+    with sqlite3.connect(database_location) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(validation_sql)
+        rows = cursor.fetchone()
+
+        # checking counts
+        if rows[0] == 0:
+            raise ValueError(f'EXCEPTION - can\'t find game_hist_id {game_hist_id} in Games_History database')
+        
+
+
+    # ==================== VIEWING THE GAME ==================== #
+    # getting the last game state of the provided game_hist_id
+    retrieve_sql = f"""
+    with game_batch as (
+        select
+            game_state,
+            row_number() over(
+                partition by game_hist_id
+                order by turn_number desc
+            ) as rn
+        from Game_Turns
+        where game_hist_id = {game_hist_id}
+    )
+    select game_state
+    from game_batch
+    where rn = 1
+    """
+
+    with sqlite3.connect(database_location) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(retrieve_sql)
+        rows = cursor.fetchone()
+
+        game_hist = json.loads(rows[0])
+
+        # loading the game history into a window
+        load_history(game_hist)
