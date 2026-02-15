@@ -1,3 +1,6 @@
+# THIS VERSION IS OLD!!!
+# REFER TO game_window.py instead :)
+
 import tkinter as tk
 from PIL import Image, ImageTk
 
