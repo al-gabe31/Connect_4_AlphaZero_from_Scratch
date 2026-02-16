@@ -89,8 +89,14 @@ class Game_Window:
         # binding an on_click events here
         self.blue_board.bind('<Button-1>', self.on_click)
 
+        # final setup for the board
+        self.draw_board()
+        player_tag = '' if self.ai_color is None else f" [{'AI' if self.ai_color == self.current_player else 'You'}]"
+        self.update_status(f'Red\'s turn{player_tag}', self.red_piece)
+
         # if we're playing against an AI, check the game state
         if self.ai_color is not None:
+            self.root.update()
             self.root.after(1, self.check_game_state)
 
     def reset_board(self):
@@ -120,6 +126,9 @@ class Game_Window:
         # if image is provided, change the image in the status section to that image
         if image is not None:
             self.status_image_label.config(image=image)
+
+        # force update the window
+        self.root.update()
 
     def board_full(self):
         # returns true if all pieces on the board are currently occupied
@@ -254,9 +263,6 @@ class Game_Window:
 
     # handles player vs AI situations
     def check_game_state(self):
-        print(f'curr player: {self.current_player}')
-        print(f'curr AI history: {"" if len(self.ai_tree.memory_bank) == 0 else self.ai_tree.memory_bank[-1][0]}')
-        
         # CASE 1: game is already over
         if self.game_over == True:
             print('Game is over!')
@@ -273,8 +279,8 @@ class Game_Window:
                 exploration_constant=self.mcts_exploration_constant
             )
             end_time = time.perf_counter()
-            self.drop_piece(move_chosen)
             print(f'AI chose move {move_chosen} [{round(end_time - start_time, 3)}s]')
+            self.drop_piece(move_chosen)
 
         # CASE 3: player's turn
         elif self.current_player != self.ai_color:
@@ -360,13 +366,10 @@ class Game_Window:
 
 def run_2_player_game():
     window = Game_Window()
-    window.draw_board()
-    window.update_status('Red\'s turn', window.red_piece)
     window.root.mainloop()
 
 def load_history(imported_history):
     window = Game_Window()
-    window.draw_board()
 
     window.history = []
     window.history_index = 0
@@ -415,10 +418,6 @@ def load_history(imported_history):
             
     window.history_index = len(window.history)
     window.current_player = player
-    window.update_status(
-        'Red\'s turn' if window.current_player == 'R' else 'Yellow\'s turn',
-        window.red_piece if window.current_player == 'R' else window.yellow_piece
-    )
 
     window.root.mainloop()
 
@@ -432,9 +431,6 @@ def play_against_AI(
     # ==================== GAME SETUP ==================== #
     player_color = 'R' if player_going_first else 'Y' # player is red if they're going first, otherwise yellow
     ai_color = 'R' if player_color == 'Y' else 'Y' # ai gets the other color
-
-    print(f'player_color = {player_color}')
-    print(f'ai_color = {ai_color}')
 
     # setting up the MCTS tree for the AI
     tree = MCTS_Tree(
@@ -450,8 +446,6 @@ def play_against_AI(
         mcts_max_depth=mcts_max_depth,
         mcts_exploration_constant=mcts_exploration_constant
     )
-    window.draw_board()
-    window.update_status('Red\'s turn', window.red_piece)
     window.root.mainloop()
 
 
