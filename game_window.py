@@ -30,7 +30,7 @@ class Game_Window:
         self.root.title('Connect 4')
 
         # Canvas for board
-        self.blue_board = tk.Canvas(self.root, width=WIDTH, height=HEIGHT - 120, bg='blue') # the blue board is where the pieces are placed in
+        self.blue_board = tk.Canvas(self.root, width=WIDTH, height=HEIGHT - 120, bg='#00008b') # the blue board is where the pieces are placed in
         self.blue_board.pack()
 
         # Status bar frame (status + buttons)
