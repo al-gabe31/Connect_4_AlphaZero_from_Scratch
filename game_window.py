@@ -1,5 +1,7 @@
 import tkinter as tk
+import time
 from PIL import Image, ImageTk
+from mcts import *
 
 # CONSTANTS
 NUM_ROWS = 6
@@ -15,7 +17,14 @@ BUTTON_HEIGHT = 2
 BUTTON_FONT = ('Arial', 14)
 
 class Game_Window:
-    def __init__(self):
+    def __init__(
+        self,
+        ai_color:str = None,
+        ai_tree:MCTS_Tree = None,
+        mcts_simulations:int = None,
+        mcts_max_depth:int = None,
+        mcts_exploration_constant:int = None
+    ):
         # Initialize root window
         self.root = tk.Tk()
         self.root.title('Connect 4')
@@ -64,6 +73,13 @@ class Game_Window:
         self.circle_to_column = {}
         self.piece_images = []
 
+        # AI settings
+        self.ai_color = ai_color # color of the AI's pieces: 'R', 'Y', or None (None meaning AI isn't playing the game)
+        self.ai_tree:MCTS_Tree = ai_tree
+        self.mcts_simulations:int = mcts_simulations # how many simulations MCTS will run before getting an output
+        self.mcts_max_depth:int = mcts_max_depth # how far at most MCTS will search at the current root node
+        self.mcts_exploration_constant:int = mcts_exploration_constant # sets exploration value for MCTS
+
         # setting history buttons here
         tk.Button(self.controls, text='⏮', command=self.to_start, width=BUTTON_WIDTH, height=BUTTON_HEIGHT, font=BUTTON_FONT).pack(side='left', padx=4)
         tk.Button(self.controls, text='◀', command=self.back_one, width=BUTTON_WIDTH, height=BUTTON_HEIGHT, font=BUTTON_FONT).pack(side='left', padx=4)
@@ -72,6 +88,10 @@ class Game_Window:
 
         # binding an on_click events here
         self.blue_board.bind('<Button-1>', self.on_click)
+
+        # if we're playing against an AI, check the game state
+        if self.ai_color is not None:
+            self.root.after(1, self.check_game_state)
 
     def reset_board(self):
         self.blue_board.delete('piece') # delete all images labeled 'piece' in the board
@@ -166,8 +186,9 @@ class Game_Window:
         # Status for history view
         if self.history_index < len(self.history): # i.e. the board isn't the current state of the game
             viewing_player = self.player_at_index(self.history_index) # tells us who's turn it was at that point in history: 'R' or 'Y'
+            player_tag = '' if self.ai_color is None else f" [{'AI' if self.ai_color == viewing_player else 'You'}]"
             self.update_status(
-                f"{'Red' if viewing_player == 'R' else 'Yellow'} to move",
+                f"{'Red' if viewing_player == 'R' else 'Yellow'} to move{player_tag}",
                 self.red_piece if viewing_player == 'R' else self.yellow_piece
             )
 
@@ -178,6 +199,11 @@ class Game_Window:
         
         # otherwise, place the piece on a specified column
         self.apply_move(col, self.current_player)
+
+        # if player is going against AI, let the AI know which move the player chose
+        if self.ai_color is not None and self.current_player != self.ai_color:
+            self.ai_tree.curr_root_node.full_expansion()
+            self.ai_tree.reroot(col)
 
         # records the new move into the history array and incrementing history_index so that history_index == history.append(col)
         self.history.append(col)
@@ -199,34 +225,91 @@ class Game_Window:
             return
         
         self.current_player = 'Y' if self.current_player == 'R' else 'R'
+        player_tag = '' if self.ai_color is None else f" [{'AI' if self.ai_color == self.current_player else 'You'}]"
         self.update_status(
-            'Red\'s turn' if self.current_player == 'R' else 'Yellow\'s turn',
+            f'Red\'s turn{player_tag}' if self.current_player == 'R' else f'Yellow\'s turn{player_tag}',
             self.red_piece if self.current_player == 'R' else self.yellow_piece
         )
+
+        # check game state if player is going against an AI
+        if self.ai_color is not None:
+            self.check_game_state()
 
     # action that will be taken on a click event
     def on_click(self, event):
         # clicks do nothing if we're not looking at the current state of the board or if the game is already over
         if self.history_index != len(self.history) or self.game_over:
             return
+
+        # clicks also do nothing if it's currently the AI's turn
+        elif self.current_player == self.ai_color:
+            print('It\'s currently the AI\'s turn! Please wait...')
+            return
+
+        # otherwise, behave normally
         item = self.blue_board.find_closest(event.x, event.y)
         col = self.circle_to_column.get(item[0])
         if col is not None:
             self.drop_piece(col)
 
+    # handles player vs AI situations
+    def check_game_state(self):
+        print(f'curr player: {self.current_player}')
+        print(f'curr AI history: {"" if len(self.ai_tree.memory_bank) == 0 else self.ai_tree.memory_bank[-1][0]}')
+        
+        # CASE 1: game is already over
+        if self.game_over == True:
+            print('Game is over!')
+
+        # CASE 2: AI's turn
+        elif self.current_player == self.ai_color:
+            print('AI is thinking...')
+            
+            # get the AI's move
+            start_time = time.perf_counter()
+            move_chosen = self.ai_tree.make_move(
+                max_iterations=self.mcts_simulations,
+                max_depth=self.mcts_max_depth,
+                exploration_constant=self.mcts_exploration_constant
+            )
+            end_time = time.perf_counter()
+            self.drop_piece(move_chosen)
+            print(f'AI chose move {move_chosen} [{round(end_time - start_time, 3)}s]')
+
+        # CASE 3: player's turn
+        elif self.current_player != self.ai_color:
+            print('Your turn!')
+
     # history navigation
     def to_start(self):
+        if self.ai_color is not None and self.ai_color == self.current_player and self.game_over == False:
+            # can't use history button if it's currently the AI's turn
+            print('currently AI\'s turn!')
+            return
+        
         self.history_index = 0
         self.rebuild_from_history() # for this case, it will just clear the board
         self.update_status('Viewing start of game', image=None)
 
     def back_one(self):
+        if self.ai_color is not None and self.ai_color == self.current_player and self.game_over == False:
+            # can't use history button if it's currently the AI's turn
+            print('currently AI\'s turn!')
+            return
+        
         if self.history_index > 0: # prevents history_index being negative
             self.history_index -= 1
             self.rebuild_from_history() # clears the board and replaces all pieces up to the last turn made
-            self.update_status(f'Move {self.history_index}/{len(self.history)}')
+            curr_player = 'R' if self.history_index % 2 == 0 else 'Y'
+            player_tag = '' if self.ai_color is None else f" [{'AI' if self.ai_color == curr_player else 'You'}]"
+            self.update_status(f'Move {self.history_index}/{len(self.history)}{player_tag}')
 
     def forward_one(self):
+        if self.ai_color is not None and self.ai_color == self.current_player and self.game_over == False:
+            # can't use history button if it's currently the AI's turn
+            print('currently AI\'s turn!')
+            return
+        
         if self.history_index < len(self.history): # prevents history_index going outside history
             self.history_index += 1
             self.rebuild_from_history() # clears the board and replaces all pieces up to the next turns in history view
@@ -242,12 +325,19 @@ class Game_Window:
                 # and the board is full means it's a tie
                 self.update_status('Tie!', image=None)
             else:
+                curr_player = 'R' if self.history_index % 2 == 0 else 'Y'
+                player_tag = '' if self.ai_color is None else f" [{'AI' if self.ai_color == curr_player else 'You'}]"
                 self.update_status(
-                    f'Move {self.history_index}/{len(self.history)}',
+                    f'Move {self.history_index}/{len(self.history)}{player_tag}',
                     self.red_piece if self.history_index % 2 == 0 else self.yellow_piece
                 )
 
     def to_live(self):
+        if self.ai_color is not None and self.ai_color == self.current_player and self.game_over == False:
+            # can't use history button if it's currently the AI's turn
+            print('currently AI\'s turn!')
+            return
+        
         self.history_index = len(self.history) # make history_index catch up to the current state of the board
         self.rebuild_from_history() # clears the board and replaces all the pieces up to the current state of the board
 
@@ -262,8 +352,9 @@ class Game_Window:
             # and the board is full means it's a tie
             self.update_status('Tie!', image=None)
         else:
+            player_tag = '' if self.ai_color is None else f" [{'AI' if self.ai_color == self.current_player else 'You'}]"
             self.update_status(
-                'Red\'s turn' if self.history_index % 2 == 0 else 'Yellow\'s turn',
+                f'Red\'s turn{player_tag}' if self.history_index % 2 == 0 else f'Yellow\'s turn{player_tag}',
                 self.red_piece if self.history_index % 2 == 0 else self.yellow_piece
             )
 
@@ -329,6 +420,38 @@ def load_history(imported_history):
         window.red_piece if window.current_player == 'R' else window.yellow_piece
     )
 
+    window.root.mainloop()
+
+def play_against_AI(
+        player_going_first:bool,
+        neural_network:Neural_Network,
+        mcts_simulations:int = 100,
+        mcts_max_depth:int = 6,
+        mcts_exploration_constant:int = 3
+):
+    # ==================== GAME SETUP ==================== #
+    player_color = 'R' if player_going_first else 'Y' # player is red if they're going first, otherwise yellow
+    ai_color = 'R' if player_color == 'Y' else 'Y' # ai gets the other color
+
+    print(f'player_color = {player_color}')
+    print(f'ai_color = {ai_color}')
+
+    # setting up the MCTS tree for the AI
+    tree = MCTS_Tree(
+        root_history=[],
+        neural_network=neural_network
+    )
+
+    # setting up the window for the game to run in
+    window = Game_Window(
+        ai_color=ai_color,
+        ai_tree=tree,
+        mcts_simulations=mcts_simulations,
+        mcts_max_depth=mcts_max_depth,
+        mcts_exploration_constant=mcts_exploration_constant
+    )
+    window.draw_board()
+    window.update_status('Red\'s turn', window.red_piece)
     window.root.mainloop()
 
 
