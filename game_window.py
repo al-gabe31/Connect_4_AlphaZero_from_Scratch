@@ -1,5 +1,7 @@
 import tkinter as tk
 import time
+import threading
+import queue
 from PIL import Image, ImageTk
 from mcts import *
 
@@ -79,6 +81,8 @@ class Game_Window:
         self.mcts_simulations:int = mcts_simulations # how many simulations MCTS will run before getting an output
         self.mcts_max_depth:int = mcts_max_depth # how far at most MCTS will search at the current root node
         self.mcts_exploration_constant:int = mcts_exploration_constant # sets exploration value for MCTS
+        self.ai_busy = False # tells us if the AI is currently thinking of a move
+        self.ai_move_queue = queue.Queue() # this is where the AI's chosen move will go
 
         # setting history buttons here
         tk.Button(self.controls, text='⏮', command=self.to_start, width=BUTTON_WIDTH, height=BUTTON_HEIGHT, font=BUTTON_FONT).pack(side='left', padx=4)
@@ -250,9 +254,9 @@ class Game_Window:
         if self.history_index != len(self.history) or self.game_over:
             return
 
-        # clicks also do nothing if it's currently the AI's turn
-        elif self.current_player == self.ai_color:
-            print('It\'s currently the AI\'s turn! Please wait...')
+        # clicks also do nothing if the AI is currently thinking of a move
+        elif self.ai_busy:
+            print(f'It\'s currently the AI\'s turn! Please wait... [{self.ai_tree.curr_root_node.num_visits} / {self.mcts_simulations} simulations done]')
             return
 
         # otherwise, behave normally
@@ -260,6 +264,32 @@ class Game_Window:
         col = self.circle_to_column.get(item[0])
         if col is not None:
             self.drop_piece(col)
+
+    def ai_think_task(self):
+        # start calculating the the AI's chosen move
+        start_time = time.perf_counter()
+        move_chosen = self.ai_tree.make_move(
+            max_iterations=self.mcts_simulations,
+            max_depth=self.mcts_max_depth,
+            exploration_constant=self.mcts_exploration_constant
+        )
+        end_time = time.perf_counter()
+        print(f'AI chose move {move_chosen} [{round(end_time - start_time, 3)}s]')
+
+        # adding the chosen move to the queue
+        self.ai_move_queue.put(move_chosen)
+
+    def check_for_move(self):
+        try:
+            # check if AI has chosen move
+            move_chosen = self.ai_move_queue.get_nowait()
+
+            # apply the move
+            self.drop_piece(move_chosen)
+            self.ai_busy = False
+        except queue.Empty:
+            # if the AI is still thinking, come back again in 100ms
+            self.root.after(100, self.check_for_move)
 
     # handles player vs AI situations
     def check_game_state(self):
@@ -269,18 +299,14 @@ class Game_Window:
 
         # CASE 2: AI's turn
         elif self.current_player == self.ai_color:
+            self.ai_busy = True
             print('AI is thinking...')
             
-            # get the AI's move
-            start_time = time.perf_counter()
-            move_chosen = self.ai_tree.make_move(
-                max_iterations=self.mcts_simulations,
-                max_depth=self.mcts_max_depth,
-                exploration_constant=self.mcts_exploration_constant
-            )
-            end_time = time.perf_counter()
-            print(f'AI chose move {move_chosen} [{round(end_time - start_time, 3)}s]')
-            self.drop_piece(move_chosen)
+            # get the AI's move (starting the worker thread for it)
+            threading.Thread(target=self.ai_think_task, daemon=True).start()
+
+            # check in on the AI if it's made a move
+            self.root.after(100, self.check_for_move)
 
         # CASE 3: player's turn
         elif self.current_player != self.ai_color:
@@ -288,9 +314,9 @@ class Game_Window:
 
     # history navigation
     def to_start(self):
-        if self.ai_color is not None and self.ai_color == self.current_player and self.game_over == False:
+        if self.ai_color is not None and self.ai_busy and self.game_over == False:
             # can't use history button if it's currently the AI's turn
-            print('currently AI\'s turn!')
+            print(f'It\'s currently the AI\'s turn! Please wait... [{self.ai_tree.curr_root_node.num_visits} / {self.mcts_simulations} simulations done]')
             return
         
         self.history_index = 0
@@ -298,9 +324,9 @@ class Game_Window:
         self.update_status('Viewing start of game', image=None)
 
     def back_one(self):
-        if self.ai_color is not None and self.ai_color == self.current_player and self.game_over == False:
+        if self.ai_color is not None and self.ai_busy and self.game_over == False:
             # can't use history button if it's currently the AI's turn
-            print('currently AI\'s turn!')
+            print(f'It\'s currently the AI\'s turn! Please wait... [{self.ai_tree.curr_root_node.num_visits} / {self.mcts_simulations} simulations done]')
             return
         
         if self.history_index > 0: # prevents history_index being negative
@@ -311,9 +337,9 @@ class Game_Window:
             self.update_status(f'Move {self.history_index}/{len(self.history)}{player_tag}')
 
     def forward_one(self):
-        if self.ai_color is not None and self.ai_color == self.current_player and self.game_over == False:
+        if self.ai_color is not None and self.ai_busy and self.game_over == False:
             # can't use history button if it's currently the AI's turn
-            print('currently AI\'s turn!')
+            print(f'It\'s currently the AI\'s turn! Please wait... [{self.ai_tree.curr_root_node.num_visits} / {self.mcts_simulations} simulations done]')
             return
         
         if self.history_index < len(self.history): # prevents history_index going outside history
@@ -339,9 +365,9 @@ class Game_Window:
                 )
 
     def to_live(self):
-        if self.ai_color is not None and self.ai_color == self.current_player and self.game_over == False:
+        if self.ai_color is not None and self.ai_busy and self.game_over == False:
             # can't use history button if it's currently the AI's turn
-            print('currently AI\'s turn!')
+            print(f'It\'s currently the AI\'s turn! Please wait... [{self.ai_tree.curr_root_node.num_visits} / {self.mcts_simulations} simulations done]')
             return
         
         self.history_index = len(self.history) # make history_index catch up to the current state of the board
