@@ -260,7 +260,7 @@ class AI_Config_Window:
         # button for easy difficulty
         Selectable_Round_Button(
             self.difficulty_frame,
-            'NOOB',
+            'EASY',
             group=self.difficulty_group,
             command=lambda: self.select_difficulty('Easy'),
             default_selected=True,
@@ -272,7 +272,7 @@ class AI_Config_Window:
         # button for medium difficulty
         Selectable_Round_Button(
             self.difficulty_frame,
-            'PRO',
+            'MEDIUM',
             group=self.difficulty_group,
             command=lambda: self.select_difficulty('Medium'),
             border_color='#ffd814',
@@ -283,7 +283,7 @@ class AI_Config_Window:
         # button for hard difficulty
         Selectable_Round_Button(
             self.difficulty_frame,
-            'HACKER',
+            'HARD',
             group=self.difficulty_group,
             command=lambda: self.select_difficulty('Hard'),
             border_color='#e60000',
