@@ -174,8 +174,6 @@ class Init_Config_Window:
         ).pack(side='left', padx=6)
 
     def opponent_chosen(self, root, chosen_opponent):
-        print(f'Opponent chosen: {chosen_opponent}')
-
         # updates opponent setting=
         if chosen_opponent == 'Player':
             self.opponent_is_player = True
@@ -311,12 +309,9 @@ class AI_Config_Window:
         ).pack()
 
     def select_color(self, color):
-        print(f'Player wants to play {color}')
         self.player_color = 'R' if color == 'Red' else 'Y'
 
     def select_difficulty(self, level):
-        print(f'Difficulty selected: {level}')
-
         if level == 'Easy':
             self.ai_settings = {
                 'mcts_simulations': 100,
@@ -337,9 +332,6 @@ class AI_Config_Window:
             }
 
     def start_game(self, root):
-        print('Game will start')
-        print(f'Player Color: {self.player_color}')
-        print(f'AI Settings:\n{self.ai_settings}')
         root.destroy() # closes the window
 
     def create_header(self, parent, text):
@@ -359,7 +351,7 @@ if __name__ == '__main__':
     w1.root.mainloop()
 
     # seeing if we're able to extract data correctly
-    print('\n\nDATA EXTRACTION')
+    print('DATA EXTRACTION')
     print(f"Chosen Opponent: {'Player' if w1.opponent_is_player else 'AI'}\n\n")
     
     
