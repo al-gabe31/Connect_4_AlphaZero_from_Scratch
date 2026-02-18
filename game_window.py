@@ -4,6 +4,7 @@ import threading
 import queue
 from PIL import Image, ImageTk
 from mcts import *
+from config_window import *
 
 # CONSTANTS
 NUM_ROWS = 6
@@ -474,13 +475,36 @@ def play_against_AI(
     )
     window.root.mainloop()
 
+# starting point for the entire project
+def run_application(neural_network:Neural_Network = None):
+    # ======================== CHOOSING OPPONENT ======================== #
+    init_config = Init_Config_Window()
+    init_config.root.mainloop()
+
+    # act based on chosen opponent
+    if init_config.opponent_is_player: # play 2 player game
+        run_2_player_game()
+    else:
+        # otherwise, start AI config window
+        ai_config = AI_Config_Window()
+        ai_config.root.mainloop()
+
+        # play game against AI based on chosen settings
+        player_going_first = True if ai_config.player_color == 'R' else False
+        mcts_simulations = ai_config.ai_settings['mcts_simulations']
+        mcts_max_depth = ai_config.ai_settings['mcts_max_depth']
+        mcts_exploration_constant = ai_config.ai_settings['mcts_exploration_constant']
+
+        play_against_AI(
+            player_going_first=player_going_first,
+            neural_network=neural_network,
+            mcts_simulations=mcts_simulations,
+            mcts_max_depth=mcts_max_depth,
+            mcts_exploration_constant=mcts_exploration_constant
+        )
+
+
 
 
 if __name__ == "__main__":
-    history_1 = [6, 2, 3, 3, 6, 6, 3, 2, 3, 2, 2, 3, 5, 2]
-    history_2 = [2, 6, 3, 3, 6, 2, 0, 6]
-
-    load_history(history_1)
-    load_history(history_2)
-    
-    print('all good!')
+    run_application() # this alone won't work for playing against AI (must import db_management to retrieve neural_network)
