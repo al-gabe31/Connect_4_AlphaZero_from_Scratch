@@ -127,6 +127,74 @@ class Selectable_Round_Button(tk.Canvas):
 
 
 
+# class for the initial config window
+class Init_Config_Window:
+    def __init__(self):
+        # ==================== EXTRACTABLE SETTINGS ==================== #
+        self.opponent_is_player = True # True for player vs player, False for player vs AI
+
+
+
+        # ==================== CREATING MAIN WINDOW ==================== #
+        # window setup
+        self.root = tk.Tk()
+        self.root.title('Connect 4 Initial Setup')
+        self.root.configure(bg='#f0f0f0')
+
+        # text & button layout setup
+        self.create_header(self.root, 'CHOOSE OPPONENT')
+
+        self.opponent_frame = tk.Frame(self.root, bg=self.root['bg'])
+        self.opponent_frame.pack(pady=5)
+
+        # button for player opponent
+        Selectable_Round_Button(
+            self.opponent_frame,
+            'PLAYER',
+            width=200,
+            height=50,
+            group=None,
+            command=lambda: self.opponent_chosen(self.root, 'Player'),
+            border_color='#00c452',
+            fill_color='#76ffaf',
+            hover_color='#00eb62'
+        ).pack(side='left', padx=6)
+
+        # button for AI opponent
+        Selectable_Round_Button(
+            self.opponent_frame,
+            'AI',
+            width=200,
+            height=50,
+            group=None,
+            command=lambda: self.opponent_chosen(self.root, 'AI'),
+            border_color='#e60000',
+            fill_color='#ffb4b4',
+            hover_color='#ff8181'
+        ).pack(side='left', padx=6)
+
+    def opponent_chosen(self, root, chosen_opponent):
+        print(f'Opponent chosen: {chosen_opponent}')
+
+        # updates opponent setting=
+        if chosen_opponent == 'Player':
+            self.opponent_is_player = True
+        elif chosen_opponent == 'AI':
+            self.opponent_is_player = False
+
+        root.destroy() # closes the window
+
+    def create_header(self, parent, text):
+        label = tk.Label(
+            parent,
+            text=text,
+            font=('Arial', 12, 'bold'),
+            bg=parent['bg']
+        )
+        label.pack(pady=(8, 2))
+
+
+
 # class for the AI config window
 class AI_Config_Window:
     def __init__(self):
@@ -164,6 +232,7 @@ class AI_Config_Window:
             'RED [1st]',
             group=self.color_group,
             command=lambda: self.select_color('Red'),
+            width=215,
             default_selected=True,
             border_color='#e60000',
             fill_color='#ffb4b4',
@@ -176,6 +245,7 @@ class AI_Config_Window:
             'YELLOW [2nd]',
             group=self.color_group,
             command=lambda: self.select_color('Yellow'),
+            width=215,
             border_color='#ffd814',
             fill_color='#ffe876',
             hover_color='#ffe24e'
@@ -198,7 +268,7 @@ class AI_Config_Window:
             default_selected=True,
             border_color='#00c452',
             fill_color='#76ffaf',
-            hover_color='#00eb62',
+            hover_color='#00eb62'
         ).pack(side='left', padx=6)
 
         # button for medium difficulty
@@ -284,12 +354,24 @@ class AI_Config_Window:
 
 
 if __name__ == '__main__':
-    w1 = AI_Config_Window()
+    # testing init config window
+    w1 = Init_Config_Window()
     w1.root.mainloop()
 
     # seeing if we're able to extract data correctly
     print('\n\nDATA EXTRACTION')
-    print(f'Player Color: {w1.player_color}')
-    print(f'AI Settings:\n{w1.ai_settings}')
+    print(f"Chosen Opponent: {'Player' if w1.opponent_is_player else 'AI'}\n\n")
+    
+    
+    
+    
+    # testing AI config window
+    w2 = AI_Config_Window()
+    w2.root.mainloop()
+
+    # seeing if we're able to extract data correctly
+    print('\n\nDATA EXTRACTION')
+    print(f'Player Color: {w2.player_color}')
+    print(f'AI Settings:\n{w2.ai_settings}')
     
     print('All good!')
