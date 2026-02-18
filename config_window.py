@@ -233,7 +233,7 @@ class AI_Config_Window:
             width=215,
             default_selected=True,
             border_color='#e60000',
-            fill_color='#ffb4b4',
+            fill_color='#ffffff',
             hover_color='#ff8181'
         ).pack(side='left', padx=8)
 
@@ -245,7 +245,7 @@ class AI_Config_Window:
             command=lambda: self.select_color('Yellow'),
             width=215,
             border_color='#ffd814',
-            fill_color='#ffe876',
+            fill_color='#ffffff',
             hover_color='#ffe24e'
         ).pack(side='left', padx=8)
 
@@ -265,7 +265,7 @@ class AI_Config_Window:
             command=lambda: self.select_difficulty('Easy'),
             default_selected=True,
             border_color='#00c452',
-            fill_color='#76ffaf',
+            fill_color='#ffffff',
             hover_color='#00eb62'
         ).pack(side='left', padx=6)
 
@@ -276,7 +276,7 @@ class AI_Config_Window:
             group=self.difficulty_group,
             command=lambda: self.select_difficulty('Medium'),
             border_color='#ffd814',
-            fill_color='#ffe876',
+            fill_color='#ffffff',
             hover_color='#ffe24e'
         ).pack(side='left', padx=6)
 
@@ -287,7 +287,7 @@ class AI_Config_Window:
             group=self.difficulty_group,
             command=lambda: self.select_difficulty('Hard'),
             border_color='#e60000',
-            fill_color='#ffb4b4',
+            fill_color='#ffffff',
             hover_color='#ff8181'
         ).pack(side='left', padx=6)
 
